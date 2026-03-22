@@ -4,7 +4,7 @@ from app.models.schemas import Question
 from app.services.store import DOCUMENT_STORE
 from app.services.gemini import generate_answer, client
 from app.services.vector import search_chunks
-from app.services.cache import make_key, get_cache, set_cache
+from app.services.cache import create_answer_key, get_answer_cache, save_answer_cache
 from app.dependencies import verify_api_key
 from loguru import logger
 
@@ -12,13 +12,13 @@ router = APIRouter()
 
 @router.post("/ask", dependencies=[Depends(verify_api_key)])
 async def ask_question(question: Question):
-    filename = DOCUMENT_STORE["filename"]
-    if not filename:
+    file_name = DOCUMENT_STORE["file_name"]
+    if not file_name:
         raise HTTPException(status_code=400, detail="No document uploaded yet. Please upload a PDF first.")
     
     # Check cache
-    cache_key = make_key(question.message, filename)
-    cached_response = get_cache(cache_key)
+    cache_key = create_answer_key(question.message, file_name)
+    cached_response = get_answer_cache(cache_key)
     if cached_response:
         logger.info(f"Cache hit for question: {question.message}")
         return cached_response
@@ -37,12 +37,12 @@ async def ask_question(question: Question):
         
         response_data = {
             "answer": answer,
-            "source_file": filename,
+            "source_file": file_name,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
         # Save to cache
-        set_cache(cache_key, response_data)
+        save_answer_cache(cache_key, response_data)
         
         return response_data
         

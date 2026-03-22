@@ -11,11 +11,15 @@ services:
     depends_on:
       - chromadb
       - redis
+    restart: unless-stopped
 
   chromadb:
     image: chromadb/chroma
     ports:
       - "8001:8000"
+    volumes:
+      - chromadb_data:/chroma/chroma
+    restart: unless-stopped
 
   chromadb-admin:
     image: fengzhichao/chromadb-admin
@@ -25,11 +29,20 @@ services:
       - "8082:3001"
     depends_on:
       - chromadb
+    restart: unless-stopped
 
   redis:
     image: redis:alpine
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   redis-commander:
     image: rediscommander/redis-commander:latest
@@ -39,3 +52,8 @@ services:
       - "8081:8081"
     depends_on:
       - redis
+    restart: unless-stopped
+
+volumes:
+  chromadb_data:
+  redis_data:

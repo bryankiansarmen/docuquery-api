@@ -12,7 +12,7 @@ except Exception as e:
     chroma = None
     collection = None
 
-def store_chunks(chunks: list[dict], filename: str, client):
+def store_chunks(chunks: list[dict], file_name: str, client, doc_id: str = None):
     if not collection:
         logger.error("ChromaDB not available, skipping storage.")
         return
@@ -23,11 +23,12 @@ def store_chunks(chunks: list[dict], filename: str, client):
             model="gemini-embedding-001",
                 contents=chunk["text"]
             )
+            prefix = doc_id if doc_id else file_name
             collection.add(
-                ids=[f"{filename}-{chunk['index']}"],
+                ids=[f"{prefix}-{chunk['index']}"],
                 embeddings=[result.embeddings[0].values],
                 documents=[chunk["text"]],
-                metadatas=[{"source": filename, "index": chunk["index"]}]
+                metadatas=[{"source": file_name, "index": chunk["index"]}]
             )
         except Exception as e:
             logger.error(f"Error storing chunk {chunk['index']}: {e}")
