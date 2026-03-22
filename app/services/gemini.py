@@ -11,13 +11,16 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
-def generate_answer(content: str, question: str):
+def generate_answer(question: str, chunks: list[str], client):
+    context = "\n\n".join(chunks)
     response = client.models.generate_content(
         model="gemini-3-flash-preview",
-        contents=f"""You are a helpful assistant. Answer the user's question based strictly on the document content below.
-        <document>
-        {content}
-        </document>
+        contents=f"""Answer the question directly and concisely using the context provided.
+        Do not say "based on the document", "according to the context", or any similar phrase.
+        Just answer as if you already know the information.
+        <context>
+        {context}
+        </context>
         Question: {question}""",
     )
     return response.text

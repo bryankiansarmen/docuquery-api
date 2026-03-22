@@ -11,3 +11,13 @@ def extract_text_from_pdf(file_stream: bytes) -> tuple[str, int]:
     doc.close()
     
     return all_text, page_count
+
+def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[dict]:
+    words = text.split()
+    chunks = []
+    i = 0
+    while i < len(words):
+        chunk = " ".join(words[i:i + chunk_size])
+        chunks.append({"index": len(chunks), "text": chunk})
+        i += chunk_size - overlap
+    return chunks

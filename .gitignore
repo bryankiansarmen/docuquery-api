@@ -29,6 +29,7 @@ wheels/
 # Specific to this project
 .env
 output.txt
+logs/
 
 # IDEs
 .vscode/
