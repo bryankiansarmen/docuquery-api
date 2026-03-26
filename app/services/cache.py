@@ -47,5 +47,16 @@ def save_doc_meta(doc_id: str, meta: dict):
     if not r: return
     try:
         r.set(f"doc:{doc_id}", json.dumps(meta))
+        r.set("active_doc", json.dumps(meta))
     except Exception as e:
         logger.error(f"Redis meta write error: {e}")
+
+def get_active_doc():
+    """Retrieve the currently active document metadata from Redis."""
+    if not r: return None
+    try:
+        val = r.get("active_doc")
+        return json.loads(val) if val else None
+    except Exception as e:
+        logger.warning(f"Redis active doc read error: {e}")
+        return None

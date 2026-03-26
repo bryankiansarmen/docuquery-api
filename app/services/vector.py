@@ -7,10 +7,12 @@ CHROMA_HOST = os.getenv("CHROMA_HOST")
 try:
     chroma = chromadb.HttpClient(host=CHROMA_HOST, port=8000)
     collection = chroma.get_or_create_collection("documents")
+    semantic_cache_collection = chroma.get_or_create_collection("semantic_cache")
 except Exception as e:
     logger.error(f"Failed to connect to ChromaDB at {CHROMA_HOST}: {e}")
     chroma = None
     collection = None
+    semantic_cache_collection = None
 
 def store_chunks(chunks: list[dict], file_name: str, client, doc_id: str = None):
     if not collection:
@@ -51,3 +53,54 @@ def search_chunks(question: str, client, n=5) -> list[str]:
     except Exception as e:
         logger.error(f"Error searching chunks: {e}")
         return []
+
+def get_semantic_cache(question: str, file_name: str, client, threshold=0.3) -> dict | None:
+    if not semantic_cache_collection:
+        return None
+
+    try:
+        result = client.models.embed_content(
+            model="gemini-embedding-001",
+            contents=question
+        )
+        query_embedding = result.embeddings[0].values
+        
+        results = semantic_cache_collection.query(
+            query_embeddings=[query_embedding],
+            n_results=1,
+            where={"source": file_name}
+        )
+        
+        if results["documents"] and results["distances"] and results["distances"][0][0] < threshold:
+            logger.info(f"Semantic cache hit (distance: {results['distances'][0][0]:.4f})")
+            return {
+                "answer": results["documents"][0][0],
+                "metadata": results["metadatas"][0][0]
+            }
+        return None
+    except Exception as e:
+        logger.error(f"Error checking semantic cache: {e}")
+        return None
+
+def save_semantic_cache(question: str, answer: str, file_name: str, client):
+    if not semantic_cache_collection:
+        return
+
+    try:
+        import hashlib
+        cache_id = hashlib.sha256(f"{question}{file_name}".encode()).hexdigest()
+        
+        result = client.models.embed_content(
+            model="gemini-embedding-001",
+            contents=question
+        )
+        
+        semantic_cache_collection.add(
+            ids=[cache_id],
+            embeddings=[result.embeddings[0].values],
+            documents=[answer],
+            metadatas=[{"question": question, "source": file_name}]
+        )
+        logger.info(f"Saved to semantic cache: {question[:50]}...")
+    except Exception as e:
+        logger.error(f"Error saving to semantic cache: {e}")

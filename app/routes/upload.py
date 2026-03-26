@@ -24,7 +24,10 @@ async def upload_document(file: UploadFile):
         existing_meta = DOCUMENT_STORE
 
     if existing_meta:
-        return {"message": "Document already processed", "page_count": existing_meta["page_count"]}
+        DOCUMENT_STORE.update(existing_meta)
+        save_doc_meta(doc_id, existing_meta)
+        logger.info(f"Re-activated existing document: {existing_meta['file_name']}")
+        return {"message": "Document already processed and re-activated", "page_count": existing_meta["page_count"]}
 
     content, page_count = extract_text_from_pdf(file_bytes)
 
