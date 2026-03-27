@@ -1,21 +1,9 @@
-import chromadb
 from loguru import logger
-import os
+from app.db.chroma import document_collection, semantic_cache_collection
+import hashlib
 
-CHROMA_HOST = os.getenv("CHROMA_HOST")
-
-try:
-    chroma = chromadb.HttpClient(host=CHROMA_HOST, port=8000)
-    collection = chroma.get_or_create_collection("documents")
-    semantic_cache_collection = chroma.get_or_create_collection("semantic_cache")
-except Exception as e:
-    logger.error(f"Failed to connect to ChromaDB at {CHROMA_HOST}: {e}")
-    chroma = None
-    collection = None
-    semantic_cache_collection = None
-
-def store_chunks(chunks: list[dict], file_name: str, client, doc_id: str = None):
-    if not collection:
+def store_document_chunks(chunks: list[dict], file_name: str, client, document_id: str = None):
+    if not document_collection:
         logger.error("ChromaDB not available, skipping storage.")
         return
     
@@ -25,8 +13,8 @@ def store_chunks(chunks: list[dict], file_name: str, client, doc_id: str = None)
             model="gemini-embedding-001",
                 contents=chunk["text"]
             )
-            prefix = doc_id if doc_id else file_name
-            collection.add(
+            prefix = document_id if document_id else file_name
+            document_collection.add(
                 ids=[f"{prefix}-{chunk['index']}"],
                 embeddings=[result.embeddings[0].values],
                 documents=[chunk["text"]],
@@ -35,8 +23,8 @@ def store_chunks(chunks: list[dict], file_name: str, client, doc_id: str = None)
         except Exception as e:
             logger.error(f"Error storing chunk {chunk['index']}: {e}")
 
-def search_chunks(question: str, client, n=5) -> list[str]:
-    if not collection:
+def search_document_chunks(question: str, client, n=5) -> list[str]:
+    if not document_collection:
         logger.error("ChromaDB not available, skipping search.")
         return []
 
@@ -45,7 +33,7 @@ def search_chunks(question: str, client, n=5) -> list[str]:
         model="gemini-embedding-001",
             contents=question
         )
-        results = collection.query(
+        results = document_collection.query(
             query_embeddings=[result.embeddings[0].values],
             n_results=n
         )
@@ -54,7 +42,7 @@ def search_chunks(question: str, client, n=5) -> list[str]:
         logger.error(f"Error searching chunks: {e}")
         return []
 
-def get_semantic_cache(question: str, file_name: str, client, threshold=0.3) -> dict | None:
+def get_semantic_question_cache(question: str, file_name: str, client, threshold=0.3) -> dict | None:
     if not semantic_cache_collection:
         return None
 
@@ -82,12 +70,11 @@ def get_semantic_cache(question: str, file_name: str, client, threshold=0.3) -> 
         logger.error(f"Error checking semantic cache: {e}")
         return None
 
-def save_semantic_cache(question: str, answer: str, file_name: str, client):
+def save_semantic_question_cache(question: str, answer: str, file_name: str, client):
     if not semantic_cache_collection:
         return
 
     try:
-        import hashlib
         cache_id = hashlib.sha256(f"{question}{file_name}".encode()).hexdigest()
         
         result = client.models.embed_content(
