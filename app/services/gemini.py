@@ -1,14 +1,3 @@
-from google import genai
-import os
-
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-try:
-    client = genai.Client(api_key=GEMINI_API_KEY)
-except Exception as e:
-    logger.error(f"Failed to connect to Gemini at {GEMINI_API_KEY}: {e}")
-    client = None
-
 def build_prompt(question: str, chunks: list[str], history: list[dict]) -> str:
     context = "\n\n".join(chunks)
     history_text = ""

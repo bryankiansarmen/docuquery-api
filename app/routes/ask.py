@@ -2,7 +2,8 @@ from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone
 from app.models.schemas import Question
 from app.services.store import DOCUMENT_STORE
-from app.services.gemini import generate_answer, client as gemini_client
+from app.clients.gemini import gemini_client
+from app.services.gemini import generate_answer
 from app.services.vector import search_document_chunks, get_semantic_question_cache, save_semantic_question_cache
 from app.services.cache import create_answer_key, get_answer_cache, save_answer_cache, get_active_document
 from app.services.chat import get_chat_history, save_chat_turn

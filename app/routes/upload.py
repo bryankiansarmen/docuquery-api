@@ -2,7 +2,7 @@ from fastapi import APIRouter, UploadFile, HTTPException, Depends
 from app.services.pdf import extract_text_from_pdf, chunk_text
 from app.services.vector import store_document_chunks
 from app.services.store import DOCUMENT_STORE
-from app.services.gemini import client
+from app.clients.gemini import gemini_client
 from app.services.cache import get_document_metadata, save_document_metadata
 from app.dependencies import verify_api_key
 from loguru import logger
@@ -40,13 +40,13 @@ async def upload_document(file: UploadFile):
     chunks = chunk_text(content)
 
     try:
-        store_document_chunks(chunks, file.filename, client, document_id)
+        store_document_chunks(chunks, file.filename, gemini_client, document_id)
         logger.info(f"Stored {len(chunks)} chunks for {file.filename}")
 
         # persist to in-memory store
         DOCUMENT_STORE.update({
             "file_name": file.filename,
-            "doc_id": document_id,
+            "document_id": document_id,
             "page_count": page_count,
             "chunk_count": len(chunks),
             "content": content
@@ -55,7 +55,7 @@ async def upload_document(file: UploadFile):
         # persist to Redis
         save_document_metadata(document_id, {
             "file_name": file.filename,
-            "doc_id": document_id,
+            "document_id": document_id,
             "page_count": page_count,
             "chunk_count": len(chunks)
         })

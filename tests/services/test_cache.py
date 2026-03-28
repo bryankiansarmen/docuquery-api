@@ -36,20 +36,20 @@ def test_save_answer_cache(mock_redis):
     mock_redis.setex.assert_called_once_with("test_key", 3600, json.dumps(value))
 
 def test_document_metadata_operations(mock_redis):
-    mock_redis.get.return_value = json.dumps({"doc_id": "123", "page_count": 5})
+    mock_redis.get.return_value = json.dumps({"document_id": "123", "page_count": 5})
 
     result = get_document_metadata("123")
-    save_document_metadata("123", {"doc_id": "123", "page_count": 5})
+    save_document_metadata("123", {"document_id": "123", "page_count": 5})
     
     assert result["page_count"] == 5
     assert mock_redis.set.call_count == 2
 
 def test_get_active_document_hit(mock_redis):
-    mock_redis.get.return_value = json.dumps({"doc_id": "active-123", "page_count": 10})
+    mock_redis.get.return_value = json.dumps({"document_id": "active-123", "page_count": 10})
 
     result = get_active_document()
 
-    assert result["doc_id"] == "active-123"
+    assert result["document_id"] == "active-123"
     assert result["page_count"] == 10
     mock_redis.get.assert_called_once_with("active_document")
 

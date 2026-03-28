@@ -14,7 +14,7 @@ sys.modules['motor'] = MagicMock()
 sys.modules['motor.motor_asyncio'] = MagicMock()
 
 from app.main import app
-from app.services import gemini as gemini_mod
+from app.clients import gemini as gemini_mod
 
 @pytest.fixture
 def client():
@@ -64,6 +64,6 @@ def mock_gemini(mocker):
     mock_embed_result.embeddings = [MagicMock(values=[0.1, 0.2, 0.3])]
     mock_client.models.embed_content.return_value = mock_embed_result
 
-    mocker.patch.object(gemini_mod, "client", mock_client)
+    mocker.patch.object(gemini_mod, "gemini_client", mock_client)
     
     return mock_client
