@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, HTTPException
+from fastapi import APIRouter, UploadFile, HTTPException, Depends
 from app.services.pdf import extract_text_from_pdf, chunk_text
 from app.services.vector import store_document_chunks
 from app.services.store import DOCUMENT_STORE

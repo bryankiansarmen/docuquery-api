@@ -52,7 +52,7 @@ async def ask_question(question: Question):
     try:
         history = await get_chat_history(file_name, session_id)
 
-        chunks = await search_document_chunks(question.message, gemini_client)
+        chunks = search_document_chunks(question.message, gemini_client)
         if not chunks:
             chunks = ["No specific context found in the uploaded document."]
 

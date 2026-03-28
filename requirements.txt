@@ -8,3 +8,7 @@ redis
 loguru
 motor
 pymongo
+pytest
+pytest-asyncio
+pytest-mock
+httpx

@@ -75,6 +75,20 @@ When running via Docker Compose, you can access the following management UIs:
 | `CHROMA_PORT`    | No       | Port for ChromaDB service (default: `8000`)                                 |
 | `MONGO_URL`      | **Yes**  | MongoDB connection string (default: `mongodb://mongodb:27017`)              |
 
+## Testing
+
+This project includes a comprehensive, heavily-mocked unit test suite built with `pytest`. The suite runs entirely in isolation without needing active container instances of MongoDB, Redis, ChromaDB, or external requests to the Gemini API.
+
+To run the test suite locally:
+
+1. **Ensure dependencies are installed in your virtual environment**
+2. **Run PyTest**
+   ```bash
+   pytest -v tests/
+   ```
+
+The test scope strictly follows the Arrange-Act-Assert (AAA) testing pattern and evaluates both route API endpoints and internal module boundaries.
+
 ## Project Structure
 ```text
 docuquery-api/
@@ -97,9 +111,15 @@ docuquery-api/
 │   │   └── schemas.py   # Pydantic models
 │   ├── dependencies.py  # Shared FastAPI dependencies
 │   └── main.py          # FastAPI entry point
+├── tests/               # Unit test suite (fully mocked)
+│   ├── routes/          # Route endpoint tests
+│   ├── services/        # Business logic tests
+│   ├── conftest.py      # Pytest mocks and shared fixtures
+│   └── test_dependencies.py
 ├── logs/                # Application log files
 ├── Dockerfile           # Docker configuration
 ├── docker-compose.yml   # Docker Compose orchestration
 ├── requirements.txt     # Python dependencies
+├── pytest.ini           # Pytest configuration
 ├── .env.example         # Environment variable template
 └── README.md            # You are here
