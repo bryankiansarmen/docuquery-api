@@ -55,10 +55,12 @@ When running via Docker Compose, you can access the following management UIs:
 
 ## API Endpoints
 
-| Method | Endpoint  | Description                                      | Auth Required |
-|--------|-----------|--------------------------------------------------|---------------|
-| POST   | `/upload` | Upload a PDF document                            | Yes           |
-| POST   | `/ask`    | Ask a question about the uploaded document       | Yes           |
+| Method | Endpoint                    | Description                                      | Auth Required |
+|--------|-----------------------------|--------------------------------------------------|---------------|
+| POST   | `/upload`                   | Upload a PDF document                            | Yes           |
+| POST   | `/ask`                      | Ask a question about the uploaded document       | Yes           |
+| GET    | `/documents`                | List all uploaded documents metadata             | Yes           |
+| GET    | `/documents/{document_id}`  | Get specific document metadata                   | Yes           |
 
 > [!TIP]
 > Interactive API documentation (Swagger UI) is available at `http://localhost:8000/docs`.
@@ -101,14 +103,16 @@ docuquery-api/
 │   │   └── redis.py     # Redis client
 │   ├── routes/
 │   │   ├── upload.py    # /upload endpoint
-│   │   └── ask.py       # /ask endpoint
+│   │   ├── ask.py       # /ask endpoint
+│   │   └── documents.py # /documents management endpoints
 │   ├── services/
 │   │   ├── pdf.py       # PDF processing logic
 │   │   ├── gemini.py    # Gemini API integration
 │   │   ├── vector.py    # ChromaDB indexing logic
 │   │   ├── cache.py     # Semantic cache logic
 │   │   ├── store.py     # Direct storage service
-│   │   └── chat.py      # LLM chat interaction
+│   │   ├── chat.py      # LLM chat interaction
+│   │   └── document.py  # Document metadata service (MongoDB)
 │   ├── models/
 │   │   └── schemas.py   # Pydantic models
 │   ├── dependencies.py  # Shared FastAPI dependencies

@@ -71,4 +71,4 @@ def test_save_semantic_question_cache(mock_chroma, mock_gemini):
     
     save_semantic_question_cache(question, answer, file_name, mock_gemini)
     
-    mock_chroma["semantic"].add.assert_called_once()
+    mock_chroma["semantic"].upsert.assert_called_once()

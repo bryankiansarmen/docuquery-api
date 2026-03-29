@@ -3,9 +3,11 @@ from app.services.pdf import extract_text_from_pdf, chunk_text
 from app.services.vector import store_document_chunks
 from app.services.store import DOCUMENT_STORE
 from app.clients.gemini import gemini_client
-from app.services.cache import get_document_metadata, save_document_metadata
+from app.services.cache import get_document_metadata as get_redis_metadata, save_document_metadata as save_redis_metadata
+from app.services.document import save_document_metadata as save_mongo_metadata
 from app.dependencies import verify_api_key
 from loguru import logger
+from app.models.schemas import DocumentMetadata
 import hashlib
 
 router = APIRouter()
@@ -26,7 +28,7 @@ async def upload_document(file: UploadFile):
             "chunks": DOCUMENT_STORE.get("chunk_count")
         }
 
-    existing_metadata = get_document_metadata(document_id)
+    existing_metadata = get_redis_metadata(document_id)
     if existing_metadata:
         DOCUMENT_STORE.update(existing_metadata)
         logger.info(f"Re-activated existing document from Redis: {existing_metadata['file_name']}")
@@ -43,23 +45,26 @@ async def upload_document(file: UploadFile):
         store_document_chunks(chunks, file.filename, gemini_client, document_id)
         logger.info(f"Stored {len(chunks)} chunks for {file.filename}")
 
-        # persist to in-memory store
-        DOCUMENT_STORE.update({
-            "file_name": file.filename,
-            "document_id": document_id,
-            "page_count": page_count,
-            "chunk_count": len(chunks),
-            "content": content
-        })
+        metadata = DocumentMetadata(
+            document_id=document_id,
+            file_name=file.filename,
+            page_count=page_count,
+            chunk_count=len(chunks)
+        )
 
-        # persist to Redis
-        save_document_metadata(document_id, {
+        await save_mongo_metadata(metadata)
+        logger.debug(f"Persisted document metadata to MongoDB: {document_id}")
+
+        redis_meta = {
             "file_name": file.filename,
             "document_id": document_id,
             "page_count": page_count,
             "chunk_count": len(chunks)
-        })
+        }
+        save_redis_metadata(document_id, redis_meta)
         logger.debug(f"Persisted document metadata to Redis: {document_id}")
+
+        DOCUMENT_STORE.update(redis_meta)
 
     except Exception as e:
         logger.error(f"Failed to store chunks: {e}")

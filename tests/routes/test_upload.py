@@ -43,7 +43,7 @@ def test_upload_pdf_in_redis_but_not_memory(client, mocker):
     file_bytes = b"hello pdf"
     
     # Mock cache hit for existing metadata
-    mocker.patch("app.routes.upload.get_document_metadata", return_value={
+    mocker.patch("app.routes.upload.get_redis_metadata", return_value={
         "file_name": "test.pdf",
         "page_count": 3,
         "chunk_count": 6
@@ -62,11 +62,11 @@ def test_upload_pdf_in_redis_but_not_memory(client, mocker):
     assert data["chunks"] == 6
 
 def test_upload_pdf_success_new_document(client, mocker):
-    mocker.patch("app.routes.upload.get_document_metadata", return_value=None)
+    mocker.patch("app.routes.upload.get_redis_metadata", return_value=None)
     mocker.patch("app.routes.upload.extract_text_from_pdf", return_value=("Doc text", 1))
     mocker.patch("app.routes.upload.chunk_text", return_value=[{"index": 0, "text": "Doc text"}])
     mock_store_chunks = mocker.patch("app.routes.upload.store_document_chunks")
-    mock_save_meta = mocker.patch("app.routes.upload.save_document_metadata")
+    mock_save_meta = mocker.patch("app.routes.upload.save_mongo_metadata")
     
     file_bytes = b"brand new pdf"
     
@@ -90,7 +90,7 @@ def test_upload_pdf_success_new_document(client, mocker):
     assert upload.DOCUMENT_STORE["chunk_count"] == 1
 
 def test_upload_pdf_fails_in_storage(client, mocker):
-    mocker.patch("app.routes.upload.get_document_metadata", return_value=None)
+    mocker.patch("app.routes.upload.get_redis_metadata", return_value=None)
     mocker.patch("app.routes.upload.extract_text_from_pdf", return_value=("Doc text", 1))
     mocker.patch("app.routes.upload.chunk_text", return_value=[])
     

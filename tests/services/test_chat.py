@@ -10,7 +10,7 @@ async def test_get_chat_history(mock_mongo):
         {"question": "newest question", "answer": "a1"},
         {"question": "oldest question", "answer": "a2"}
     ]
-    mock_mongo.find = MagicMock(return_value=mock_cursor_instance)
+    mock_mongo["chat"].find = MagicMock(return_value=mock_cursor_instance)
 
     history = await get_chat_history("document_id", "session_id")
 
@@ -18,7 +18,7 @@ async def test_get_chat_history(mock_mongo):
         {"question": "oldest question", "answer": "a2"},
         {"question": "newest question", "answer": "a1"}
     ]
-    mock_mongo.find.assert_called_once_with(
+    mock_mongo["chat"].find.assert_called_once_with(
         {"document_id": "document_id", "session_id": "session_id"},
         sort=[("timestamp", -1)],
         limit=10
@@ -28,8 +28,8 @@ async def test_get_chat_history(mock_mongo):
 async def test_save_chat_turn(mock_mongo):
     await save_chat_turn("doc1", "sess1", "q1", "a1")
 
-    mock_mongo.insert_one.assert_called_once()
-    args, kwargs = mock_mongo.insert_one.call_args
+    mock_mongo["chat"].insert_one.assert_called_once()
+    args, kwargs = mock_mongo["chat"].insert_one.call_args
     doc = args[0]
     
     assert doc["document_id"] == "doc1"

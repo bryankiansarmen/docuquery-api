@@ -6,11 +6,12 @@ def store_document_chunks(chunks: list[dict], file_name: str, client, document_i
     if not document_collection:
         logger.error("ChromaDB not available, skipping storage.")
         return
-    
+
+    success_count = 0
     for chunk in chunks:
         try:
             result = client.models.embed_content(
-            model="gemini-embedding-001",
+                model="gemini-embedding-001",
                 contents=chunk["text"]
             )
             prefix = document_id if document_id else file_name
@@ -20,8 +21,11 @@ def store_document_chunks(chunks: list[dict], file_name: str, client, document_i
                 documents=[chunk["text"]],
                 metadatas=[{"source": file_name, "index": chunk["index"]}]
             )
+            success_count += 1
         except Exception as e:
             logger.error(f"Error storing chunk {chunk['index']}: {e}")
+
+    logger.info(f"Stored {success_count}/{len(chunks)} chunks for {file_name}")
 
 def search_document_chunks(question: str, client, n=5) -> list[str]:
     if not document_collection:
@@ -30,7 +34,7 @@ def search_document_chunks(question: str, client, n=5) -> list[str]:
 
     try:
         result = client.models.embed_content(
-        model="gemini-embedding-001",
+            model="gemini-embedding-001",
             contents=question
         )
         results = document_collection.query(
@@ -51,14 +55,12 @@ def get_semantic_question_cache(question: str, file_name: str, client, threshold
             model="gemini-embedding-001",
             contents=question
         )
-        query_embedding = result.embeddings[0].values
-        
         results = semantic_cache_collection.query(
-            query_embeddings=[query_embedding],
+            query_embeddings=[result.embeddings[0].values],
             n_results=1,
             where={"source": file_name}
         )
-        
+
         if results["documents"] and results["distances"] and results["distances"][0][0] < threshold:
             logger.info(f"Semantic cache hit (distance: {results['distances'][0][0]:.4f})")
             return {
@@ -76,13 +78,11 @@ def save_semantic_question_cache(question: str, answer: str, file_name: str, cli
 
     try:
         cache_id = hashlib.sha256(f"{question}{file_name}".encode()).hexdigest()
-        
         result = client.models.embed_content(
             model="gemini-embedding-001",
             contents=question
         )
-        
-        semantic_cache_collection.add(
+        semantic_cache_collection.upsert(
             ids=[cache_id],
             embeddings=[result.embeddings[0].values],
             documents=[answer],

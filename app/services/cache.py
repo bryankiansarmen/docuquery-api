@@ -3,11 +3,9 @@ from loguru import logger
 from app.db.redis import redis_client
 
 def create_answer_key(question: str, file_name: str) -> str:
-    """Generate a unique cache key for a question and document."""
     return hashlib.sha256(f"{question}{file_name}".encode()).hexdigest()
 
 def get_answer_cache(key: str):
-    """Retrieve cached answer from Redis."""
     if not redis_client: return None
     try:
         val = redis_client.get(key)
@@ -17,15 +15,13 @@ def get_answer_cache(key: str):
         return None
 
 def save_answer_cache(key: str, value: dict):
-    """Store answer in Redis with 1 hour expiration."""
     if not redis_client: return
     try:
         redis_client.setex(key, 3600, json.dumps(value))
     except Exception as e:
         logger.error(f"Redis cache write error: {e}")
 
-def get_document_metadata(document_id: str):
-    """Retrieve document metadata from Redis by hash."""
+def get_document_metadata(document_id: str) -> dict | None:
     if not redis_client: return None
     try:
         val = redis_client.get(f"document:{document_id}")
@@ -35,16 +31,15 @@ def get_document_metadata(document_id: str):
         return None
 
 def save_document_metadata(document_id: str, meta: dict):
-    """Save document metadata to Redis."""
     if not redis_client: return
     try:
         redis_client.set(f"document:{document_id}", json.dumps(meta))
         redis_client.set("active_document", json.dumps(meta))
+        logger.debug(f"Saved document metadata to Redis: {document_id}")
     except Exception as e:
         logger.error(f"Redis document metadata write error: {e}")
 
-def get_active_document():
-    """Retrieve the currently active document metadata from Redis."""
+def get_active_document() -> dict | None:
     if not redis_client: return None
     try:
         val = redis_client.get("active_document")

@@ -45,11 +45,25 @@ def mock_chroma(mocker):
 
 @pytest.fixture(autouse=True, scope="function")
 def mock_mongo(mocker):
-    mock_collection = AsyncMock()
+    mock_chat_collection = MagicMock()
+    mock_doc_collection = MagicMock()
     
-    mocker.patch("app.services.chat.chat_history_collection", mock_collection)
+    # Mock async methods specifically
+    mock_chat_collection.insert_one = AsyncMock()
+    mock_chat_collection.find_one = AsyncMock()
+    mock_chat_collection.delete_one = AsyncMock()
+    
+    mock_doc_collection.update_one = AsyncMock()
+    mock_doc_collection.find_one = AsyncMock()
+    mock_doc_collection.delete_one = AsyncMock()
+    
+    mocker.patch("app.services.chat.chat_history_collection", mock_chat_collection)
+    mocker.patch("app.services.document.document_metadata_collection", mock_doc_collection)
 
-    return mock_collection
+    return {
+        "chat": mock_chat_collection,
+        "document": mock_doc_collection
+    }
 
 @pytest.fixture(autouse=True, scope="function")
 def mock_gemini(mocker):
