@@ -1,4 +1,4 @@
-# AI-Powered Document Q&A API
+# DocuQuery API
 
 A lightweight FastAPI application that allows users to upload PDF documents and ask questions about their content using Google Gemini AI, with persistent vector storage and caching.
 
@@ -73,7 +73,7 @@ When running via Docker Compose, you can access the following management UIs:
 | `REDIS_PORT`     | No       | Port for Redis service (default: `6379`)                                    |
 | `CHROMA_HOST`    | No       | Hostname for ChromaDB service (default: `chromadb` for Docker)              |
 | `CHROMA_PORT`    | No       | Port for ChromaDB service (default: `8000`)                                 |
-| `MONGO_URL`      | **Yes**  | MongoDB connection string (default: `mongodb://mongodb:27017`)              |
+| `MONGO_URL`      | No       | MongoDB connection string (default: `mongodb://mongodb:27017`)              |
 
 ## Testing
 
@@ -93,6 +93,8 @@ The test scope strictly follows the Arrange-Act-Assert (AAA) testing pattern and
 ```text
 docuquery-api/
 ├── app/
+│   ├── clients/         # External API clients (e.g., Gemini)
+│   │   └── gemini.py    # Gemini API client
 │   ├── db/              # Database connection logic
 │   │   ├── chroma.py    # ChromaDB client
 │   │   ├── mongo.py     # MongoDB client (motor)
@@ -113,9 +115,16 @@ docuquery-api/
 │   └── main.py          # FastAPI entry point
 ├── tests/               # Unit test suite (fully mocked)
 │   ├── routes/          # Route endpoint tests
+│   │   ├── test_ask.py    # Tests for /ask endpoint
+│   │   └── test_upload.py # Tests for /upload endpoint
 │   ├── services/        # Business logic tests
+│   │   ├── test_cache.py  # Tests for cache logic
+│   │   ├── test_chat.py   # Tests for chat logic
+│   │   ├── test_gemini.py # Tests for Gemini API integration
+│   │   ├── test_pdf.py    # Tests for PDF processing
+│   │   └── test_vector.py # Tests for ChromaDB indexing logic
 │   ├── conftest.py      # Pytest mocks and shared fixtures
-│   └── test_dependencies.py
+│   └── test_dependencies.py # Shared test dependencies
 ├── logs/                # Application log files
 ├── Dockerfile           # Docker configuration
 ├── docker-compose.yml   # Docker Compose orchestration
