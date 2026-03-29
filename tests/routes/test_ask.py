@@ -15,12 +15,12 @@ def test_ask_no_document(client, mocker):
     mocker.patch.object(ask, "DOCUMENT_STORE", {})
     mocker.patch("app.routes.ask.get_active_document", return_value=None)
     
-    req_body = {"message": "Query", "document_id": "doc_123"}
+    request_body = {"message": "Query", "document_id": "doc_123"}
     
-    res = client.post("/ask", json=req_body, headers={"X-API-Key": "test-api-key"})
+    response = client.post("/ask", json=request_body, headers={"X-API-Key": "test-api-key"})
     
-    assert res.status_code == 400
-    assert "No document uploaded yet" in res.json()["detail"]
+    assert response.status_code == 400
+    assert "No document uploaded yet" in response.json()["detail"]
 
 def test_ask_recovers_active_document_from_redis(client, mocker):
     mocker.patch.object(ask, "DOCUMENT_STORE", {})
@@ -30,23 +30,23 @@ def test_ask_recovers_active_document_from_redis(client, mocker):
     mocker.patch("app.routes.ask.save_answer_cache")
     mocker.patch("app.routes.ask.save_semantic_question_cache")
     
-    req_body = {"message": "Query", "document_id": "doc_123"}
+    request_body = {"message": "Query", "document_id": "doc_123"}
     
-    res = client.post("/ask", json=req_body, headers={"X-API-Key": "test-api-key"})
+    response = client.post("/ask", json=request_body, headers={"X-API-Key": "test-api-key"})
     
-    assert res.status_code == 200
-    assert res.json()["source_file"] == "redis_recover.pdf"
+    assert response.status_code == 200
+    assert response.json()["source_file"] == "redis_recover.pdf"
     assert ask.DOCUMENT_STORE["file_name"] == "redis_recover.pdf"
 
 def test_ask_exact_cache_hit(client, mocker):
     mocker.patch("app.routes.ask.get_answer_cache", return_value={"answer": "cached exact answer"})
     
-    req_body = {"message": "Query", "document_id": "doc_123"}
+    request_body = {"message": "Query", "document_id": "doc_123"}
     
-    res = client.post("/ask", json=req_body, headers={"X-API-Key": "test-api-key"})
+    response = client.post("/ask", json=request_body, headers={"X-API-Key": "test-api-key"})
     
-    assert res.status_code == 200
-    assert res.json()["answer"] == "cached exact answer"
+    assert response.status_code == 200
+    assert response.json()["answer"] == "cached exact answer"
 
 def test_ask_semantic_cache_hit(client, mocker):
     mocker.patch("app.routes.ask.get_answer_cache", return_value=None)
@@ -55,12 +55,12 @@ def test_ask_semantic_cache_hit(client, mocker):
         "metadata": {"source": "test.pdf"}
     })
     
-    req_body = {"message": "Query", "document_id": "doc_123"}
+    request_body = {"message": "Query", "document_id": "doc_123"}
     
-    res = client.post("/ask", json=req_body, headers={"X-API-Key": "test-api-key"})
+    response = client.post("/ask", json=request_body, headers={"X-API-Key": "test-api-key"})
     
-    assert res.status_code == 200
-    data = res.json()
+    assert response.status_code == 200
+    data = response.json()
     assert data["answer"] == "semantic answer"
     assert data["cache_type"] == "semantic_question"
 
@@ -71,12 +71,12 @@ def test_ask_full_ai_generation(client, mocker):
     mock_save_cache = mocker.patch("app.routes.ask.save_answer_cache")
     mock_save_semantic = mocker.patch("app.routes.ask.save_semantic_question_cache")
     
-    req_body = {"message": "Query", "document_id": "test_id"}
+    request_body = {"message": "Query", "document_id": "test_id"}
     
-    res = client.post("/ask", json=req_body, headers={"X-API-Key": "test-api-key"})
+    response = client.post("/ask", json=request_body, headers={"X-API-Key": "test-api-key"})
     
-    assert res.status_code == 200
-    data = res.json()
+    assert response.status_code == 200
+    data = response.json()
     assert data["answer"] == "Here is the AI answer"
     assert data["source_file"] == "test.pdf"
     assert "session_id" in data
@@ -92,9 +92,9 @@ def test_ask_fails_server_error(client, mocker):
     mock_gen = mocker.patch("app.routes.ask.generate_answer")
     mock_gen.side_effect = Exception("LLM is down!")
     
-    req_body = {"message": "Query", "document_id": "test_id"}
+    request_body = {"message": "Query", "document_id": "test_id"}
     
-    res = client.post("/ask", json=req_body, headers={"X-API-Key": "test-api-key"})
+    response = client.post("/ask", json=request_body, headers={"X-API-Key": "test-api-key"})
     
-    assert res.status_code == 500
-    assert "LLM is down!" in res.json()["detail"]
+    assert response.status_code == 500
+    assert "LLM is down!" in response.json()["detail"]

@@ -46,11 +46,11 @@ def test_get_semantic_question_cache_hit(mock_chroma, mock_gemini):
         "metadatas": [[{"source": "test.pdf"}]]
     }
     
-    res = get_semantic_question_cache("question", "test.pdf", mock_gemini)
+    response = get_semantic_question_cache("question", "test.pdf", mock_gemini)
     
-    assert res is not None
-    assert res["answer"] == "semantic answer"
-    assert res["metadata"]["source"] == "test.pdf"
+    assert response is not None
+    assert response["answer"] == "semantic answer"
+    assert response["metadata"]["source"] == "test.pdf"
 
 def test_get_semantic_question_cache_miss_distance(mock_chroma, mock_gemini):
     # Distance is larger than the 0.3 default threshold
@@ -60,9 +60,9 @@ def test_get_semantic_question_cache_miss_distance(mock_chroma, mock_gemini):
         "metadatas": [[{"source": "test.pdf"}]]
     }
     
-    res = get_semantic_question_cache("question", "test.pdf", mock_gemini)
+    response = get_semantic_question_cache("question", "test.pdf", mock_gemini)
     
-    assert res is None
+    assert response is None
 
 def test_save_semantic_question_cache(mock_chroma, mock_gemini):
     question = "q"

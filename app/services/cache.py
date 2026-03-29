@@ -8,8 +8,8 @@ def create_answer_key(question: str, file_name: str) -> str:
 def get_answer_cache(key: str):
     if not redis_client: return None
     try:
-        val = redis_client.get(key)
-        return json.loads(val) if val else None
+        value = redis_client.get(key)
+        return json.loads(value) if value else None
     except Exception as e:
         logger.error(f"Redis cache read error: {e}")
         return None
@@ -24,8 +24,8 @@ def save_answer_cache(key: str, value: dict):
 def get_document_metadata(document_id: str) -> dict | None:
     if not redis_client: return None
     try:
-        val = redis_client.get(f"document:{document_id}")
-        return json.loads(val) if val else None
+        value = redis_client.get(f"document:{document_id}")
+        return json.loads(value) if value else None
     except Exception as e:
         logger.warning(f"Redis document metadata read error: {e}")
         return None
@@ -42,8 +42,8 @@ def save_document_metadata(document_id: str, meta: dict):
 def get_active_document() -> dict | None:
     if not redis_client: return None
     try:
-        val = redis_client.get("active_document")
-        return json.loads(val) if val else None
+        value = redis_client.get("active_document")
+        return json.loads(value) if value else None
     except Exception as e:
         logger.warning(f"Redis active document read error: {e}")
         return None

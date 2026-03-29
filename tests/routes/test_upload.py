@@ -8,14 +8,14 @@ def clean_document_store():
     upload.DOCUMENT_STORE.clear()
 
 def test_upload_non_pdf(client):
-    res = client.post(
+    response = client.post(
         "/upload", 
         files={"file": ("test.txt", b"hello text")}, 
         headers={"X-API-Key": "test-api-key"}
     )
     
-    assert res.status_code == 400
-    assert "Only PDF files are supported" in res.json()["detail"]
+    assert response.status_code == 400
+    assert "Only PDF files are supported" in response.json()["detail"]
 
 def test_upload_pdf_already_in_memory(client):
     file_bytes = b"hello pdf"
@@ -27,14 +27,14 @@ def test_upload_pdf_already_in_memory(client):
         "chunk_count": 10
     })
     
-    res = client.post(
+    response = client.post(
         "/upload", 
         files={"file": ("test.pdf", file_bytes)}, 
         headers={"X-API-Key": "test-api-key"}
     )
     
-    assert res.status_code == 200
-    data = res.json()
+    assert response.status_code == 200
+    data = response.json()
     assert data["message"] == "Document already processed and active"
     assert data["page_count"] == 5
     assert data["chunks"] == 10
@@ -49,14 +49,14 @@ def test_upload_pdf_in_redis_but_not_memory(client, mocker):
         "chunk_count": 6
     })
     
-    res = client.post(
+    response = client.post(
         "/upload", 
         files={"file": ("test.pdf", file_bytes)}, 
         headers={"X-API-Key": "test-api-key"}
     )
     
-    assert res.status_code == 200
-    data = res.json()
+    assert response.status_code == 200
+    data = response.json()
     assert data["message"] == "Document already processed and re-activated"
     assert data["page_count"] == 3
     assert data["chunks"] == 6
@@ -70,14 +70,14 @@ def test_upload_pdf_success_new_document(client, mocker):
     
     file_bytes = b"brand new pdf"
     
-    res = client.post(
+    response = client.post(
         "/upload", 
         files={"file": ("test.pdf", file_bytes)}, 
         headers={"X-API-Key": "test-api-key"}
     )
     
-    assert res.status_code == 200
-    data = res.json()
+    assert response.status_code == 200
+    data = response.json()
     assert data["message"] == "Document uploaded and processed successfully"
     assert data["page_count"] == 1
     assert data["chunks"] == 1
@@ -98,11 +98,11 @@ def test_upload_pdf_fails_in_storage(client, mocker):
     mock_store_chunks = mocker.patch("app.routes.upload.store_document_chunks")
     mock_store_chunks.side_effect = Exception("Storage blew up")
     
-    res = client.post(
+    response = client.post(
         "/upload", 
         files={"file": ("test.pdf", b"pdf content")}, 
         headers={"X-API-Key": "test-api-key"}
     )
     
-    assert res.status_code == 500
-    assert "Failed to process document storage" in res.json()["detail"]
+    assert response.status_code == 500
+    assert "Failed to process document storage" in response.json()["detail"]

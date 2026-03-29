@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.routes import upload, ask, documents
 from dotenv import load_dotenv
@@ -6,16 +7,8 @@ from app.db.mongo import document_metadata_collection, chat_history_collection
 
 load_dotenv()
 
-app = FastAPI(title="DocuQuery API")
-logger.add("logs/app.log", rotation="1 day", level="INFO")
-
-# Include routers
-app.include_router(upload.router)
-app.include_router(ask.router)
-app.include_router(documents.router)
-
-@app.on_event("startup")
-async def create_indexes():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     try:
         if document_metadata_collection is not None:
             await document_metadata_collection.create_index(
@@ -32,6 +25,15 @@ async def create_indexes():
                 background=True
             )
             logger.info("Indexes created for chat_history_collection")
-
     except Exception as e:
-        logger.error(f"Failed to create indexes: {e}")
+        logger.error(f"Failed to create indexes during startup: {e}")
+    
+    yield
+    logger.info("Application cleanup complete")
+
+app = FastAPI(title="DocuQuery API", lifespan=lifespan)
+logger.add("logs/app.log", rotation="1 day", level="INFO")
+
+app.include_router(upload.router)
+app.include_router(ask.router)
+app.include_router(documents.router)

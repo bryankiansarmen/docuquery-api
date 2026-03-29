@@ -1,14 +1,14 @@
 import pymupdf
 
 def extract_text_from_pdf(file_stream: bytes) -> tuple[str, int]:
-    doc = pymupdf.open(stream=file_stream, filetype="pdf")
+    document = pymupdf.open(stream=file_stream, filetype="pdf")
     
     all_text = ""
-    for page in doc:
+    for page in document:
         all_text += page.get_text()
     
-    page_count = len(doc)
-    doc.close()
+    page_count = len(document)
+    document.close()
     
     return all_text, page_count
 

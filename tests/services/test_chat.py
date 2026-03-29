@@ -30,10 +30,10 @@ async def test_save_chat_turn(mock_mongo):
 
     mock_mongo["chat"].insert_one.assert_called_once()
     args, kwargs = mock_mongo["chat"].insert_one.call_args
-    doc = args[0]
+    document = args[0]
     
-    assert doc["document_id"] == "doc1"
-    assert doc["session_id"] == "sess1"
-    assert doc["question"] == "q1"
-    assert doc["answer"] == "a1"
-    assert "timestamp" in doc
+    assert document["document_id"] == "doc1"
+    assert document["session_id"] == "sess1"
+    assert document["question"] == "q1"
+    assert document["answer"] == "a1"
+    assert "timestamp" in document

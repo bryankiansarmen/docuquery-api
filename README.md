@@ -70,7 +70,7 @@ When running via Docker Compose, you can access the following management UIs:
 | Variable         | Required | Description                                                                 |
 |------------------|----------|-----------------------------------------------------------------------------|
 | `GEMINI_API_KEY` | **Yes**  | Your Google Gemini API Key from [Google AI Studio](https://aistudio.google.com/app/apikey) |
-| `APP_API_KEY`    | **Yes**  | Secret key required for the `/ask` endpoint (X-API-Key header)              |
+| `APP_API_KEY`    | **Yes**  | Secret key required for all endpoints (X-API-Key header)                    |
 | `REDIS_HOST`     | No       | Hostname for Redis service (default: `redis` for Docker)                    |
 | `REDIS_PORT`     | No       | Port for Redis service (default: `6379`)                                    |
 | `CHROMA_HOST`    | No       | Hostname for ChromaDB service (default: `chromadb` for Docker)              |
@@ -95,38 +95,40 @@ The test scope strictly follows the Arrange-Act-Assert (AAA) testing pattern and
 ```text
 docuquery-api/
 ├── app/
-│   ├── clients/         # External API clients (e.g., Gemini)
+│   ├── clients/         # External API clients
 │   │   └── gemini.py    # Gemini API client
 │   ├── db/              # Database connection logic
 │   │   ├── chroma.py    # ChromaDB client
 │   │   ├── mongo.py     # MongoDB client (motor)
 │   │   └── redis.py     # Redis client
-│   ├── routes/
-│   │   ├── upload.py    # /upload endpoint
-│   │   ├── ask.py       # /ask endpoint
-│   │   └── documents.py # /documents management endpoints
-│   ├── services/
-│   │   ├── pdf.py       # PDF processing logic
-│   │   ├── gemini.py    # Gemini API integration
-│   │   ├── vector.py    # ChromaDB indexing logic
-│   │   ├── cache.py     # Semantic cache logic
-│   │   ├── store.py     # Direct storage service
-│   │   ├── chat.py      # LLM chat interaction
-│   │   └── document.py  # Document metadata service (MongoDB)
 │   ├── models/
 │   │   └── schemas.py   # Pydantic models
+│   ├── routes/
+│   │   ├── ask.py       # /ask endpoint
+│   │   ├── documents.py # /documents management endpoints
+│   │   └── upload.py    # /upload endpoint
+│   ├── services/
+│   │   ├── cache.py     # Redis caching logic
+│   │   ├── chat.py      # LLM chat interaction
+│   │   ├── document.py  # Document metadata service (MongoDB)
+│   │   ├── gemini.py    # Gemini API integration
+│   │   ├── pdf.py       # PDF processing logic
+│   │   ├── store.py     # Global memory store
+│   │   └── vector.py    # ChromaDB indexing logic
 │   ├── dependencies.py  # Shared FastAPI dependencies
 │   └── main.py          # FastAPI entry point
 ├── tests/               # Unit test suite (fully mocked)
 │   ├── routes/          # Route endpoint tests
-│   │   ├── test_ask.py    # Tests for /ask endpoint
-│   │   └── test_upload.py # Tests for /upload endpoint
+│   │   ├── test_ask.py       # Tests for /ask endpoint
+│   │   ├── test_documents.py # Tests for /documents endpoints
+│   │   └── test_upload.py    # Tests for /upload endpoint
 │   ├── services/        # Business logic tests
-│   │   ├── test_cache.py  # Tests for cache logic
-│   │   ├── test_chat.py   # Tests for chat logic
-│   │   ├── test_gemini.py # Tests for Gemini API integration
-│   │   ├── test_pdf.py    # Tests for PDF processing
-│   │   └── test_vector.py # Tests for ChromaDB indexing logic
+│   │   ├── test_cache.py     # Tests for cache logic
+│   │   ├── test_chat.py      # Tests for chat logic
+│   │   ├── test_document.py  # Tests for document service
+│   │   ├── test_gemini.py    # Tests for Gemini API integration
+│   │   ├── test_pdf.py       # Tests for PDF processing
+│   │   └── test_vector.py    # Tests for ChromaDB indexing logic
 │   ├── conftest.py      # Pytest mocks and shared fixtures
 │   └── test_dependencies.py # Shared test dependencies
 ├── logs/                # Application log files
@@ -136,3 +138,4 @@ docuquery-api/
 ├── pytest.ini           # Pytest configuration
 ├── .env.example         # Environment variable template
 └── README.md            # You are here
+```

@@ -6,12 +6,12 @@ router = APIRouter()
 
 @router.get("/documents", dependencies=[Depends(verify_api_key)])
 async def list_documents():
-    docs = await get_all_document_metadata()
-    return {"documents": docs, "total": len(docs)}
+    documents = await get_all_document_metadata()
+    return {"documents": documents, "total": len(documents)}
 
 @router.get("/documents/{document_id}", dependencies=[Depends(verify_api_key)])
 async def get_document(document_id: str):
-    doc = await get_document_metadata(document_id)
-    if not doc:
+    document = await get_document_metadata(document_id)
+    if not document:
         raise HTTPException(status_code=404, detail="Document not found")
-    return doc
+    return document
