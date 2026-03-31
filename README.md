@@ -98,9 +98,6 @@ docuquery-api/
 │   ├── clients/         # External API clients
 │   │   └── gemini.py    # Gemini API client
 │   ├── db/              # Database connection logic
-│   │   ├── chroma.py    # ChromaDB client
-│   │   ├── mongo.py     # MongoDB client (motor)
-│   │   └── redis.py     # Redis client
 │   ├── models/
 │   │   └── schemas.py   # Pydantic models
 │   ├── routes/
