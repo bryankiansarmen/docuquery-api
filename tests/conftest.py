@@ -23,9 +23,12 @@ def client():
 @pytest.fixture(autouse=True, scope="function")
 def mock_redis(mocker):
     mock_redis_client = MagicMock()
+    mock_redis_client.get.return_value = None
 
+    mocker.patch("app.db.redis.redis_client", mock_redis_client)
     mocker.patch("app.services.cache.redis_client", mock_redis_client)
-
+    mocker.patch("app.services.stream.redis_client", mock_redis_client)
+    
     return mock_redis_client
 
 @pytest.fixture(autouse=True, scope="function")

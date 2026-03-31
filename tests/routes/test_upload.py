@@ -17,7 +17,7 @@ def test_upload_non_pdf(client):
     assert response.status_code == 400
     assert "Only PDF files are supported" in response.json()["detail"]
 
-def test_upload_pdf_already_in_memory(client):
+def test_upload_pdf_already_active_in_memory(client):
     file_bytes = b"hello pdf"
     document_id = hashlib.sha256(file_bytes).hexdigest()
     
@@ -35,15 +35,16 @@ def test_upload_pdf_already_in_memory(client):
     
     assert response.status_code == 200
     data = response.json()
-    assert data["message"] == "Document already processed and active"
-    assert data["page_count"] == 5
-    assert data["chunks"] == 10
+    assert data["message"] == "Document already active"
+    assert data["status"] == "completed"
 
-def test_upload_pdf_in_redis_but_not_memory(client, mocker):
+def test_upload_pdf_already_in_redis(client, mocker):
     file_bytes = b"hello pdf"
+    document_id = hashlib.sha256(file_bytes).hexdigest()
     
     # Mock cache hit for existing metadata
     mocker.patch("app.routes.upload.get_redis_metadata", return_value={
+        "document_id": document_id,
         "file_name": "test.pdf",
         "page_count": 3,
         "chunk_count": 6
@@ -57,16 +58,15 @@ def test_upload_pdf_in_redis_but_not_memory(client, mocker):
     
     assert response.status_code == 200
     data = response.json()
-    assert data["message"] == "Document already processed and re-activated"
-    assert data["page_count"] == 3
-    assert data["chunks"] == 6
+    assert data["message"] == "Document already processed"
+    assert data["status"] == "completed"
+    
+    # Verify memory store was updated from cache
+    assert upload.DOCUMENT_STORE["document_id"] == document_id
 
-def test_upload_pdf_success_new_document(client, mocker):
+def test_upload_pdf_success_async_start(client, mocker):
     mocker.patch("app.routes.upload.get_redis_metadata", return_value=None)
-    mocker.patch("app.routes.upload.extract_text_from_pdf", return_value=("Doc text", 1))
-    mocker.patch("app.routes.upload.chunk_text", return_value=[{"index": 0, "text": "Doc text"}])
-    mock_store_chunks = mocker.patch("app.routes.upload.store_document_chunks")
-    mock_save_meta = mocker.patch("app.routes.upload.save_mongo_metadata")
+    mock_publish = mocker.patch("app.routes.upload.publish_upload_job", return_value="test-job-id")
     
     file_bytes = b"brand new pdf"
     
@@ -76,33 +76,36 @@ def test_upload_pdf_success_new_document(client, mocker):
         headers={"X-API-Key": "test-api-key"}
     )
     
-    assert response.status_code == 200
+    assert response.status_code == 202
     data = response.json()
-    assert data["message"] == "Document uploaded and processed successfully"
-    assert data["page_count"] == 1
-    assert data["chunks"] == 1
+    assert data["message"] == "Document accepted for processing"
+    assert data["job_id"] == "test-job-id"
+    assert data["status"] == "pending"
     
-    mock_store_chunks.assert_called_once()
-    mock_save_meta.assert_called_once()
-    
-    # Verify memory is updated
-    assert upload.DOCUMENT_STORE["file_name"] == "test.pdf"
-    assert upload.DOCUMENT_STORE["chunk_count"] == 1
+    mock_publish.assert_called_once()
 
-def test_upload_pdf_fails_in_storage(client, mocker):
-    mocker.patch("app.routes.upload.get_redis_metadata", return_value=None)
-    mocker.patch("app.routes.upload.extract_text_from_pdf", return_value=("Doc text", 1))
-    mocker.patch("app.routes.upload.chunk_text", return_value=[])
+def test_get_upload_status_success(client, mocker):
+    mocker.patch("app.routes.upload.get_job_status", return_value={
+        "job_id": "test-job",
+        "status": "processing",
+        "message": "Working on it"
+    })
     
-    # Simulate DB upload failure
-    mock_store_chunks = mocker.patch("app.routes.upload.store_document_chunks")
-    mock_store_chunks.side_effect = Exception("Storage blew up")
-    
-    response = client.post(
-        "/upload", 
-        files={"file": ("test.pdf", b"pdf content")}, 
+    response = client.get(
+        "/upload/status/test-job",
         headers={"X-API-Key": "test-api-key"}
     )
     
-    assert response.status_code == 500
-    assert "Failed to process document storage" in response.json()["detail"]
+    assert response.status_code == 200
+    assert response.json()["status"] == "processing"
+
+def test_get_upload_status_not_found(client, mocker):
+    mocker.patch("app.routes.upload.get_job_status", return_value=None)
+    
+    response = client.get(
+        "/upload/status/missing-job",
+        headers={"X-API-Key": "test-api-key"}
+    )
+    
+    assert response.status_code == 404
+    assert "Job not found" in response.json()["detail"]

@@ -1,3 +1,4 @@
+from enum import Enum
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -14,3 +15,14 @@ class DocumentMetadata(BaseModel):
     chunk_count: int
     page_count: int
     user_id: Optional[str] = None
+
+class JobStatus(str, Enum):
+    pending = "pending"
+    processing = "processing"
+    completed = "completed"
+    failed = "failed"
+
+class UploadedResponse(BaseModel):
+    job_id: str
+    status: JobStatus
+    message: str

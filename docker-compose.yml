@@ -62,6 +62,17 @@ services:
       - mongo_data:/data/db
     restart: unless-stopped
 
+  worker:
+    build: .
+    command: python -m app.worker
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - chromadb
+      - mongodb
+    restart: unless-stopped
+
 volumes:
   chromadb_data:
   redis_data:

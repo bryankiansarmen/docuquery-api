@@ -4,12 +4,14 @@ from app.routes import upload, ask, documents
 from dotenv import load_dotenv
 from loguru import logger
 from app.db.mongo import document_metadata_collection, chat_history_collection
+from app.services.stream import create_consumer_group
 
 load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
+        # Create MongoDB indexes
         if document_metadata_collection is not None:
             await document_metadata_collection.create_index(
                 [("document_id", 1)], unique=True, background=True
@@ -25,8 +27,12 @@ async def lifespan(app: FastAPI):
                 background=True
             )
             logger.info("Indexes created for chat_history_collection")
+            
+        # Initialize Redis consumer group
+        create_consumer_group()
+        
     except Exception as e:
-        logger.error(f"Failed to create indexes during startup: {e}")
+        logger.error(f"Startup tasks failed: {e}")
     
     yield
     logger.info("Application cleanup complete")

@@ -3,7 +3,7 @@
 A lightweight FastAPI application that allows users to upload PDF documents and ask questions about their content using Google Gemini AI, with persistent vector storage and caching.
 
 ## Features
-- **PDF Upload & Storage**: Extracts and chunks text using PyMuPDF and stores metadata in Redis and memory.
+- **Asynchronous PDF Processing**: Documents are processed in the background using **Redis Streams** and a dedicated worker, ensuring fast API responses.
 - **Semantic Vector Search**: Stores embeddings in [ChromaDB](https://www.trychroma.com/) for fast context retrieval.
 - **Hybrid Caching System**: 
   - **Exact Cache**: Redis-based caching for identical questions and file associations.
@@ -13,10 +13,11 @@ A lightweight FastAPI application that allows users to upload PDF documents and 
 - **Resilient Sessions**: Recovers active document metadata from Redis if the application restarts.
 
 ## Tech Stack
-- **API Framework**: [FastAPI](https://fastapi.tiangolo.com/) (Asynchronous for high performance)
+- **API Framework**: [FastAPI](https://fastapi.tiangolo.com/) (Asynchronous)
+- **Background Worker**: Python-based worker using Redis Streams for job orchestration.
 - **Vector Search**: [ChromaDB](https://www.trychroma.com/)
 - **Document Store & Chat History**: [MongoDB](https://www.mongodb.com/) (Motor driver)
-- **Caching & Session State**: [Redis](https://redis.io/)
+- **Caching & Job Status**: [Redis](https://redis.io/)
 - **PDF Processing**: [PyMuPDF](https://pymupdf.readthedocs.io/)
 - **AI Model**: [Google Gemini API](https://ai.google.dev/) (gemini-3-flash-preview)
 - **Embedding Model**: `gemini-embedding-001`
@@ -55,12 +56,13 @@ When running via Docker Compose, you can access the following management UIs:
 
 ## API Endpoints
 
-| Method | Endpoint                    | Description                                      | Auth Required |
-|--------|-----------------------------|--------------------------------------------------|---------------|
-| POST   | `/upload`                   | Upload a PDF document                            | Yes           |
-| POST   | `/ask`                      | Ask a question about the uploaded document       | Yes           |
-| GET    | `/documents`                | List all uploaded documents metadata             | Yes           |
-| GET    | `/documents/{document_id}`  | Get specific document metadata                   | Yes           |
+| Method | Endpoint                        | Description                                           | Auth Required |
+|--------|---------------------------------|-------------------------------------------------------|---------------|
+| POST   | `/upload`                       | Upload a PDF document (Async - returns job_id)        | Yes           |
+| GET    | `/upload/status/{job_id}`       | Check the processing status of a document             | Yes           |
+| POST   | `/ask`                          | Ask a question about the uploaded document            | Yes           |
+| GET    | `/documents`                    | List all uploaded documents metadata                  | Yes           |
+| GET    | `/documents/{document_id}`      | Get specific document metadata                        | Yes           |
 
 > [!TIP]
 > Interactive API documentation (Swagger UI) is available at `http://localhost:8000/docs`.
@@ -98,12 +100,15 @@ docuquery-api/
 │   ├── clients/         # External API clients
 │   │   └── gemini.py    # Gemini API client
 │   ├── db/              # Database connection logic
+│   │   ├── chroma.py    # ChromaDB client
+│   │   ├── mongo.py     # MongoDB client (motor)
+│   │   └── redis.py     # Redis client
 │   ├── models/
-│   │   └── schemas.py   # Pydantic models
+│   │   └── schemas.py   # Pydantic models & JobStatus
 │   ├── routes/
 │   │   ├── ask.py       # /ask endpoint
-│   │   ├── documents.py # /documents management endpoints
-│   │   └── upload.py    # /upload endpoint
+│   │   ├── documents.py # /documents endpoints
+│   │   └── upload.py    # /upload & /upload/status endpoints
 │   ├── services/
 │   │   ├── cache.py     # Redis caching logic
 │   │   ├── chat.py      # LLM chat interaction
@@ -111,26 +116,30 @@ docuquery-api/
 │   │   ├── gemini.py    # Gemini API integration
 │   │   ├── pdf.py       # PDF processing logic
 │   │   ├── store.py     # Global memory store
+│   │   ├── stream.py    # Redis Stream job orchestration
 │   │   └── vector.py    # ChromaDB indexing logic
 │   ├── dependencies.py  # Shared FastAPI dependencies
-│   └── main.py          # FastAPI entry point
-├── tests/               # Unit test suite (fully mocked)
-│   ├── routes/          # Route endpoint tests
-│   │   ├── test_ask.py       # Tests for /ask endpoint
-│   │   ├── test_documents.py # Tests for /documents endpoints
-│   │   └── test_upload.py    # Tests for /upload endpoint
-│   ├── services/        # Business logic tests
-│   │   ├── test_cache.py     # Tests for cache logic
-│   │   ├── test_chat.py      # Tests for chat logic
-│   │   ├── test_document.py  # Tests for document service
-│   │   ├── test_gemini.py    # Tests for Gemini API integration
-│   │   ├── test_pdf.py       # Tests for PDF processing
-│   │   └── test_vector.py    # Tests for ChromaDB indexing logic
-│   ├── conftest.py      # Pytest mocks and shared fixtures
-│   └── test_dependencies.py # Shared test dependencies
+│   ├── main.py          # FastAPI entry point
+│   └── worker.py        # Background processing worker
+├── tests/               # Unit & Integration test suite
+│   ├── routes/          # API endpoint tests
+│   │   ├── test_ask.py
+│   │   ├── test_documents.py
+│   │   └── test_upload.py
+│   ├── services/        # Service logic tests
+│   │   ├── test_cache.py
+│   │   ├── test_chat.py
+│   │   ├── test_document.py
+│   │   ├── test_gemini.py
+│   │   ├── test_pdf.py
+│   │   ├── test_stream.py
+│   │   └── test_vector.py
+│   ├── conftest.py      # Shared mocks & fixtures
+│   ├── test_dependencies.py
+│   └── test_worker_integration.py # E2E background worker test
 ├── logs/                # Application log files
 ├── Dockerfile           # Docker configuration
-├── docker-compose.yml   # Docker Compose orchestration
+├── docker-compose.yml   # Orchestration (API, Worker, Redis, Mongo, Chroma)
 ├── requirements.txt     # Python dependencies
 ├── pytest.ini           # Pytest configuration
 ├── .env.example         # Environment variable template

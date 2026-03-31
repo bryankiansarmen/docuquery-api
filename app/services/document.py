@@ -1,6 +1,6 @@
-from app.db.mongo import document_metadata_collection
-from app.models.schemas import DocumentMetadata
 from loguru import logger
+from app.db.mongo import document_metadata_collection, document_metadata_collection_sync
+from app.models.schemas import DocumentMetadata
 
 async def save_document_metadata(metadata: DocumentMetadata):
     if document_metadata_collection is None:
@@ -48,8 +48,17 @@ async def get_all_document_metadata() -> list[dict]:
         logger.error(f"Failed to retrieve metadata: {e}")
         return []
 
-        metadata_list = await cursor.to_list(length=100)
-        return metadata_list
+def save_document_metadata_sync(metadata: DocumentMetadata):
+    if document_metadata_collection_sync is None:
+        logger.warning("MongoDB sync collection unavailable, skipping metadata save")
+        return
+    
+    try:
+        document_metadata_collection_sync.update_one(
+            {"document_id": metadata.document_id},
+            {"$set": metadata.model_dump()},
+            upsert=True
+        )
+        logger.info(f"Save metadata (sync) for document: {metadata.file_name}")
     except Exception as e:
-        logger.error(f"Failed to retrieve metadata: {e}")
-        return []
+        logger.error(f"Failed to save metadata (sync): {e}")
