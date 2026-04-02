@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from loguru import logger
 from app.db.mongo import document_metadata_collection, chat_history_collection
 from app.services.stream import create_consumer_group
+from fastapi.responses import JSONResponse
 
 load_dotenv()
 
@@ -43,3 +44,7 @@ logger.add("logs/app.log", rotation="1 day", level="INFO")
 app.include_router(upload.router)
 app.include_router(ask.router)
 app.include_router(documents.router)
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
