@@ -54,10 +54,10 @@ pipeline {
                             -f ${HELM_CHART}/values.yaml \
                             -f ${HELM_CHART}/values-dev.yaml \
                             --namespace ${NAMESPACE} \
-                            --set secrets.geminiApiKey="${GEMINI_API_KEY}" \
-                            --set secrets.appApiKey="${APP_API_KEY}" \
-                            --set secrets.redisPassword="${REDIS_PASSWORD}" \
-                            --set secrets.mongoPassword="${MONGO_PASSWORD}" \
+                            --set secrets.geminiApiKey="\${GEMINI_API_KEY}" \
+                            --set secrets.appApiKey="\${APP_API_KEY}" \
+                            --set secrets.redisPassword="\${REDIS_PASSWORD}" \
+                            --set secrets.mongoPassword="\${MONGO_PASSWORD}" \
                             --set image.tag="${IMAGE_TAG}" \
                             --wait \
                             --timeout 3m
