@@ -73,6 +73,18 @@ services:
       - mongodb
     restart: unless-stopped
 
+  gateway:
+    build: ./gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - REDIS_HOST=redis
+      - DOCUQUERY_API_URL=http://docuquery-api:8000
+    depends_on:
+      - redis
+      - api
+    restart: unless-stopped
+
 volumes:
   chromadb_data:
   redis_data:
