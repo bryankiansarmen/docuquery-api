@@ -5,7 +5,7 @@ pipeline {
         IMAGE_NAME    = "docuquery-api"
         IMAGE_TAG     = "${env.BUILD_NUMBER}"
         NAMESPACE     = "docuquery-dev"
-        HELM_CHART    = "./helm"
+        HELM_CHART    = "./docuquery-api"
         KUBECONFIG    = "/var/jenkins_home/.kube/config"
     }
 
