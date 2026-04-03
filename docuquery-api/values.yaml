@@ -1,0 +1,38 @@
+env: dev
+
+app:
+  port: 8000
+  targetPort: 8000
+  healthPath: /health
+  failureThreshold: 3
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  successThreshold: 1
+  timeoutSeconds: 1
+
+image:
+  repository: docuquery-api
+  tag: latest
+  pullPolicy: IfNotPresent
+  pullSecret: regcred
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+redis:
+  host: redis-master
+  port: 6379
+
+chroma:
+  host: chromadb
+  port: 8000
+
+mongo:
+  url: "mongodb://$(MONGO_USER):$(MONGO_PASSWORD)@mongodb:27017/docuquery"

@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: {{ .Chart.Name }}
+    chart: {{ .Chart.Version }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  name: {{ template "fullname" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+      release: {{ .Release.Name }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}
+        release: {{ .Release.Name }}
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - {{ .Chart.Name }}
+                topologyKey: failure-domain.beta.kubernetes.io/zone
+      imagePullSecrets:
+        - name: {{ .Values.image.pullSecret }}
+      automountServiceAccountToken: false
+      containers:
+        - name: {{ template "fullname" . }}
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.app.targetPort }}
+          env:
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: docuquery
+                  key: gemini-api-key
+            - name: APP_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: docuquery
+                  key: app-api-key
+            - name: MONGO_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb
+                  key: mongodb-root-username
+            - name: MONGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb
+                  key: mongodb-root-password
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis
+                  key: redis-password
+            - name: REDIS_HOST
+              value: {{ .Values.redis.host }}
+            - name: REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: CHROMA_HOST
+              value: {{ .Values.chroma.host }}
+            - name: CHROMA_PORT
+              value: {{ .Values.chroma.port | quote }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.app.healthPath }}
+              port: {{ .Values.app.targetPort }}
+              scheme: HTTP
+            failureThreshold: {{ .Values.app.failureThreshold }}
+            initialDelaySeconds: {{ .Values.app.initialDelaySeconds }}
+            periodSeconds: {{ .Values.app.periodSeconds }}
+            successThreshold: {{ .Values.app.successThreshold }}
+            timeoutSeconds: {{ .Values.app.timeoutSeconds }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.app.healthPath }}
+              port: {{ .Values.app.targetPort }}
+              scheme: HTTP
+            failureThreshold: {{ .Values.app.failureThreshold }}
+            initialDelaySeconds: {{ .Values.app.initialDelaySeconds }}
+            periodSeconds: {{ .Values.app.periodSeconds }}
+            successThreshold: {{ .Values.app.successThreshold }}
+            timeoutSeconds: {{ .Values.app.timeoutSeconds }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

@@ -1,0 +1,28 @@
+env: prod
+
+replicaCount: 2
+
+image:
+  repository: docuquery-api
+  tag: latest
+  pullPolicy: IfNotPresent
+  pullSecret: regcred
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1024Mi
+
+redis:
+  host: redis-master
+  port: 6379
+
+chroma:
+  host: chromadb
+  port: 8000
+
+mongo:
+  url: "mongodb://$(MONGO_USER):$(MONGO_PASSWORD)@mongodb:27017/docuquery"
