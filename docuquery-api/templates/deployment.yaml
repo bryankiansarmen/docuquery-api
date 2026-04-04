@@ -79,6 +79,8 @@ spec:
               value: {{ .Values.chroma.host }}
             - name: CHROMA_PORT
               value: {{ .Values.chroma.port | quote }}
+            - name: ELASTICSEARCH_URL
+              value: {{ .Values.elasticsearch.url }}
           readinessProbe:
             httpGet:
               path: {{ .Values.app.healthPath }}

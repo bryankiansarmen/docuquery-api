@@ -12,6 +12,8 @@ sys.modules['redis'] = MagicMock()
 sys.modules['chromadb'] = MagicMock()
 sys.modules['motor'] = MagicMock()
 sys.modules['motor.motor_asyncio'] = MagicMock()
+sys.modules['elasticsearch'] = MagicMock()
+
 
 from app.main import app
 from app.clients import gemini as gemini_mod

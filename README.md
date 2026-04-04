@@ -4,25 +4,29 @@ A lightweight FastAPI application that allows users to upload PDF documents and 
 
 ## Features
 - **Asynchronous PDF Processing**: Documents are processed in the background using **Redis Streams** and a dedicated worker, ensuring fast API responses.
-- **Semantic Vector Search**: Stores embeddings in [ChromaDB](https://www.trychroma.com/) for fast context retrieval.
+- **Semantic Vector Search**: Stores embeddings in **ChromaDB** for fast context retrieval.
+- **Hybrid Hybrid Search (RRF)**: Combines **BM25 keyword search** and **vector similarity search** using **Elasticsearch** (Reciprocal Rank Fusion) for superior retrieval accuracy.
 - **Hybrid Caching System**: 
   - **Exact Cache**: Redis-based caching for identical questions and file associations.
   - **Semantic Cache**: ChromaDB-based caching for semantically similar questions using vector distance.
-- **Persistent Chat History**: Stores user-bot interactions in [MongoDB](https://www.mongodb.com/) using `motor` for asynchronous access.
-- **Contextual Q&A**: Uses Gemini 3 Flash to generate answers while maintaining conversation state across sessions.
+- **Persistent Chat History**: Stores user-bot interactions in **MongoDB** using `motor` for asynchronous access.
+- **Contextual Q&A**: Uses **Google Gemini 3 Flash** to generate answers while maintaining conversation state across sessions.
 - **Resilient Sessions**: Recovers active document metadata from Redis if the application restarts.
 
 ## Tech Stack
 - **API Framework**: [FastAPI](https://fastapi.tiangolo.com/) (Asynchronous)
 - **Background Worker**: Python-based worker using Redis Streams for job orchestration.
-- **Vector Search**: [ChromaDB](https://www.trychroma.com/)
+- **Hybrid Search Engine**: [Elasticsearch](https://www.elastic.co/elasticsearch/) (BM25 + Vector RRF)
+- **Vector Search Engine**: [ChromaDB](https://www.trychroma.com/)
 - **Document Store & Chat History**: [MongoDB](https://www.mongodb.com/) (Motor driver)
 - **Caching & Job Status**: [Redis](https://redis.io/)
+- **Data Visualization**: [Kibana](https://www.elastic.co/kibana/)
 - **PDF Processing**: [PyMuPDF](https://pymupdf.readthedocs.io/)
-- **AI Model**: [Google Gemini API](https://ai.google.dev/) (gemini-3-flash-preview)
+- **AI Model**: [Google Gemini API](https://ai.google.dev/) (Gemini 3 Flash)
 - **Embedding Model**: `gemini-embedding-001`
 - **Logger**: [Loguru](https://github.com/Delgan/loguru)
 - **Containerization**: [Docker](https://www.docker.com/)
+- **Orchestration**: [Helm](https://helm.sh/) (Kubernetes deployment)
 
 ## Getting Started
 
@@ -53,6 +57,7 @@ A lightweight FastAPI application that allows users to upload PDF documents and 
 When running via Docker Compose, you can access the following management UIs:
 - **ChromaDB Admin**: [http://localhost:8082](http://localhost:8082)
 - **Redis Commander**: [http://localhost:8081](http://localhost:8081)
+- **Kibana (ES Monitoring)**: [http://localhost:5601](http://localhost:5601)
 
 ## API Endpoints
 
@@ -77,7 +82,8 @@ When running via Docker Compose, you can access the following management UIs:
 | `REDIS_PORT`     | No       | Port for Redis service (default: `6379`)                                    |
 | `CHROMA_HOST`    | No       | Hostname for ChromaDB service (default: `chromadb` for Docker)              |
 | `CHROMA_PORT`    | No       | Port for ChromaDB service (default: `8000`)                                 |
-| `MONGO_URL`      | No       | MongoDB connection string (default: `mongodb://mongodb:27017`)              |
+| `MONGO_URL`          | No       | MongoDB connection string (default: `mongodb://mongodb:27017`)              |
+| `ELASTICSEARCH_URL` | No       | Elasticsearch connection URL (default: `http://elasticsearch:9200`)         |
 
 ## Testing
 
@@ -101,6 +107,7 @@ docuquery-api/
 │   │   └── gemini.py    # Gemini API client
 │   ├── db/              # Database connection logic
 │   │   ├── chroma.py    # ChromaDB client
+│   │   ├── elasticsearch.py # Elasticsearch client
 │   │   ├── mongo.py     # MongoDB client (motor)
 │   │   └── redis.py     # Redis client
 │   ├── models/
@@ -113,6 +120,7 @@ docuquery-api/
 │   │   ├── cache.py     # Redis caching logic
 │   │   ├── chat.py      # LLM chat interaction
 │   │   ├── document.py  # Document metadata service (MongoDB)
+│   │   ├── elasticsearch.py # Hybrid search implementation
 │   │   ├── gemini.py    # Gemini API integration
 │   │   ├── pdf.py       # PDF processing logic
 │   │   ├── store.py     # Global memory store
@@ -121,25 +129,22 @@ docuquery-api/
 │   ├── dependencies.py  # Shared FastAPI dependencies
 │   ├── main.py          # FastAPI entry point
 │   └── worker.py        # Background processing worker
+├── docuquery-api/       # Helm Chart for Kubernetes deployment
+│   ├── templates/       # Chart templates (Deployment, Service)
+│   ├── values.yaml      # Default chart values
+│   ├── values-dev.yaml  # Dev environment overrides
+│   └── values-prod.yaml # Prod environment overrides
 ├── tests/               # Unit & Integration test suite
+│   ├── db/              # Database interaction tests
 │   ├── routes/          # API endpoint tests
-│   │   ├── test_ask.py
-│   │   ├── test_documents.py
-│   │   └── test_upload.py
 │   ├── services/        # Service logic tests
-│   │   ├── test_cache.py
-│   │   ├── test_chat.py
-│   │   ├── test_document.py
-│   │   ├── test_gemini.py
-│   │   ├── test_pdf.py
-│   │   ├── test_stream.py
-│   │   └── test_vector.py
 │   ├── conftest.py      # Shared mocks & fixtures
 │   ├── test_dependencies.py
 │   └── test_worker_integration.py # E2E background worker test
 ├── logs/                # Application log files
 ├── Dockerfile           # Docker configuration
-├── docker-compose.yml   # Orchestration (API, Worker, Redis, Mongo, Chroma)
+├── Jenkinsfile          # CI/CD Pipeline configuration
+├── docker-compose.yml   # Orchestration (API, Worker, Redis, Mongo, Chroma, ES, Kibana)
 ├── requirements.txt     # Python dependencies
 ├── pytest.ini           # Pytest configuration
 ├── .env.example         # Environment variable template

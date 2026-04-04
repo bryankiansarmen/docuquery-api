@@ -7,6 +7,7 @@ from app.services.gemini import generate_answer
 from app.services.vector import search_document_chunks, get_semantic_question_cache, save_semantic_question_cache
 from app.services.cache import create_answer_key, get_answer_cache, save_answer_cache, get_active_document
 from app.services.chat import get_chat_history, save_chat_turn
+from app.services.elasticsearch import hybrid_search
 from app.dependencies import verify_api_key
 from loguru import logger
 import uuid
@@ -53,9 +54,10 @@ async def ask_question(question: Question):
     try:
         history = await get_chat_history(file_name, session_id)
 
-        chunks = search_document_chunks(question.message, gemini_client)
+        chunks = hybrid_search(question.message, file_name, gemini_client)
         if not chunks:
-            chunks = ["No specific context found in the uploaded document."]
+            logger.warning("Elasticsearch unavailable, falling back to ChromaDB")
+            chunks = search_document_chunks(question.message, gemini_client)
 
         answer = generate_answer(question.message, chunks, history, gemini_client)
 

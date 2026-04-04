@@ -12,3 +12,5 @@ pytest
 pytest-asyncio
 pytest-mock
 httpx
+elasticsearch>=8.0.0
+pytest-cov

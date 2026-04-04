@@ -7,6 +7,7 @@ from app.services.vector import store_document_chunks
 from app.services.document import save_document_metadata_sync
 from app.clients.gemini import gemini_client
 from app.models.schemas import DocumentMetadata, JobStatus
+from app.services.elasticsearch import index_chunks
 
 def process_job(message_id: str, data: dict):
     job_id = data["job_id"]
@@ -24,6 +25,7 @@ def process_job(message_id: str, data: dict):
         content, page_count = extract_text_from_pdf(file_bytes)
         chunks = chunk_text(content)
         store_document_chunks(chunks, file_name, gemini_client, document_id)
+        index_chunks(chunks, file_name, document_id, gemini_client)
 
         metadata = DocumentMetadata(
             document_id=document_id,

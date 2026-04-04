@@ -8,3 +8,6 @@ chroma:
 
 mongo:
   url: "mongodb://$(MONGO_USER):$(MONGO_PASSWORD)@mongodb:27017/docuquery"
+
+elasticsearch:
+  url: http://elasticsearch:9200

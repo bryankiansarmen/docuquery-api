@@ -43,6 +43,7 @@ def test_worker_integration_flow(client, mocker, mock_redis_stream):
     mocker.patch("app.worker.chunk_text", return_value=["chunk1", "chunk2"])
     mocker.patch("app.worker.store_document_chunks")
     mocker.patch("app.worker.save_document_metadata_sync")
+    mocker.patch("app.worker.index_chunks")
     
     mocker.patch("builtins.open", mocker.mock_open(read_data=b"fake pdf"))
     mocker.patch("os.remove")

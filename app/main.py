@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from loguru import logger
 from app.db.mongo import document_metadata_collection, chat_history_collection
 from app.services.stream import create_consumer_group
+from app.services.elasticsearch import create_elasticsearch_index
 from fastapi.responses import JSONResponse
 
 load_dotenv()
@@ -31,6 +32,9 @@ async def lifespan(app: FastAPI):
             
         # Initialize Redis consumer group
         create_consumer_group()
+
+        # Create Elasticsearch index
+        create_elasticsearch_index()
         
     except Exception as e:
         logger.error(f"Startup tasks failed: {e}")

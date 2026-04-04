@@ -9,6 +9,7 @@ def mock_dependencies(mocker):
     mocker.patch("app.routes.ask.save_chat_turn", new_callable=AsyncMock)
     mocker.patch("app.routes.ask.generate_answer", return_value="Here is the AI answer")
     mocker.patch("app.routes.ask.search_document_chunks", return_value=["Some chunk context"])
+    mocker.patch("app.routes.ask.hybrid_search", return_value=["Some hybrid context"])
 
 def test_ask_no_document(client, mocker):
     # Blank the global memory document state and ensure redis metadata also responds empty
