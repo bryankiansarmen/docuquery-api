@@ -28,6 +28,47 @@ pipeline {
             }
         }
 
+        stage("Performance Test") {
+            environment {
+                APP_API_KEY = credentials("app-api-key")
+            }
+            steps {
+                sh """
+                    . .venv/bin/activate
+                    pip install reportlab
+                    python -c "
+                    import os
+                    from reportlab.lib.pagesizes import letter
+                    from reportlab.pdfgen import canvas
+                    os.makedirs('tests/locust', exist_ok=True)
+                    c = canvas.Canvas('tests/locust/sample.pdf', pagesize=letter)
+                    c.drawString(72, 720, 'This is a sample document for performance testing.')
+                    c.drawString(72, 700, 'The main topic is document analysis and processing.')
+                    c.save()
+                    " 2>/dev/null || echo "{}" > tests/locust/sample.pdf
+                    locust -f tests/locust/locustfile.py \
+                      --host \${LOCUST_TARGET_HOST:-http://localhost:8000} \
+                      --headless \
+                      --users 50 \
+                      --spawn-rate 5 \
+                      --run-time 3m \
+                      --html locust-report.html \
+                      --csv locust-results \
+                      --stop-timeout 30
+                """
+                archiveArtifacts artifacts: "locust-report.html,locust-results*.csv", allowEmptyArchive: true
+            }
+            post {
+                always {
+                    publishHTML(target: [
+                        reportDir: ".",
+                        reportFiles: "locust-report.html",
+                        reportName: "Locust Performance Report"
+                    ])
+                }
+            }
+        }
+
         stage("Build Docker image") {
             steps {
                 sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
