@@ -14,7 +14,6 @@ document_metadata_collection = None
 # Sync clients/collections
 mongo_client_sync = None
 db_sync = None
-chat_history_collection_sync = None
 document_metadata_collection_sync = None
 
 try:

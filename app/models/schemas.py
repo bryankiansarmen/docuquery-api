@@ -21,8 +21,3 @@ class JobStatus(str, Enum):
     processing = "processing"
     completed = "completed"
     failed = "failed"
-
-class UploadedResponse(BaseModel):
-    job_id: str
-    status: JobStatus
-    message: str
