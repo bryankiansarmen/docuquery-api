@@ -4,12 +4,13 @@ from fastapi.responses import JSONResponse
 from app.services.stream import publish_upload_job, get_job_status
 from app.models.schemas import JobStatus
 from app.dependencies import verify_api_key, get_tenant_id
+from app.rate_limit import rate_limit
 from app.services.store import DOCUMENT_STORE
 from app.services.cache import get_document_metadata as get_redis_metadata
 
 router = APIRouter()
 
-@router.post("/upload", dependencies=[Depends(verify_api_key)], status_code=202)
+@router.post("/upload", dependencies=[Depends(verify_api_key), Depends(rate_limit(10, 60))], status_code=202)
 async def upload_document(file: UploadFile, tenant_id: str = Depends(get_tenant_id)):
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
@@ -43,7 +44,7 @@ async def upload_document(file: UploadFile, tenant_id: str = Depends(get_tenant_
     }
 
 
-@router.get("/upload/status/{job_id}", dependencies=[Depends(verify_api_key)])
+@router.get("/upload/status/{job_id}", dependencies=[Depends(verify_api_key), Depends(rate_limit(60, 60))])
 async def get_upload_status(job_id: str):
     status = get_job_status(job_id)
     if not status:

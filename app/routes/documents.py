@@ -1,15 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.services.document import get_all_document_metadata, get_document_metadata
 from app.dependencies import verify_api_key
+from app.rate_limit import rate_limit
 
 router = APIRouter()
 
-@router.get("/documents", dependencies=[Depends(verify_api_key)])
+@router.get("/documents", dependencies=[Depends(verify_api_key), Depends(rate_limit(60, 60))])
 async def list_documents():
     documents = await get_all_document_metadata()
     return {"documents": documents, "total": len(documents)}
 
-@router.get("/documents/{document_id}", dependencies=[Depends(verify_api_key)])
+@router.get("/documents/{document_id}", dependencies=[Depends(verify_api_key), Depends(rate_limit(60, 60))])
 async def get_document(document_id: str):
     document = await get_document_metadata(document_id)
     if not document:

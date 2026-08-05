@@ -8,12 +8,13 @@ from app.services.vector import search_document_chunks, get_semantic_question_ca
 from app.services.cache import create_answer_key, get_answer_cache, save_answer_cache, get_active_document
 from app.services.chat import get_chat_history, save_chat_turn
 from app.dependencies import verify_api_key, get_tenant_id
+from app.rate_limit import rate_limit
 from loguru import logger
 import uuid
 
 router = APIRouter()
 
-@router.post("/ask", dependencies=[Depends(verify_api_key)])
+@router.post("/ask", dependencies=[Depends(verify_api_key), Depends(rate_limit(30, 60))])
 async def ask_question(question: Question, tenant_id: str = Depends(get_tenant_id)):
     # resolve active document
     file_name = DOCUMENT_STORE.get("file_name")

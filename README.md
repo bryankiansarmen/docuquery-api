@@ -13,6 +13,7 @@ A lightweight FastAPI application that allows users to upload PDF documents and 
 - **Contextual Q&A**: Uses **Google Gemini 3 Flash** to generate answers while maintaining conversation state across sessions.
 - **Resilient Sessions**: Recovers active document metadata from Redis if the application restarts.
 - **Duplicate Document Detection**: SHA-256 fingerprinting prevents re-processing the same document.
+- **Per-Key Rate Limiting**: Redis-backed fixed-window rate limiting per `X-API-Key` (falls back to client IP) enforced directly in the API.
 
 ## Tech Stack
 - **API Framework**: [FastAPI](https://fastapi.tiangolo.com/) (Asynchronous)
@@ -25,19 +26,16 @@ A lightweight FastAPI application that allows users to upload PDF documents and 
 - **AI Model**: [Google Gemini API](https://ai.google.dev/) (Gemini 3 Flash)
 - **Embedding Model**: Server-side Qwen 3 Embedding (dense) + Splade (sparse) via Chroma Cloud
 - **Logger**: [Loguru](https://github.com/Delgan/loguru)
-- **API Gateway**: Spring Boot gateway with routing + rate limiting (separate repo)
 - **Containerization**: [Docker](https://www.docker.com/)
-- **Orchestration**: [Helm](https://helm.sh/) (Kubernetes deployment)
-- **CI/CD**: [Jenkins](https://www.jenkins.io/) declarative pipeline
-- **Load Testing**: [Locust](https://locust.io/)
+- **Deployment**: [Render](https://render.com/) (Web Service + Background Worker)
 
 ## Getting Started
 
 ### Prerequisites
-- [Docker](https://www.docker.com/get-started/) & [Docker Compose](https://docs.docker.com/compose/install/)
-- OR Python 3.10+ (local setup requires running Redis, MongoDB, and a Chroma Cloud account separately)
+- Python 3.10+
+- Redis, MongoDB, and a Chroma Cloud account (see Environment Variables below)
 
-### Run with Docker Compose (Recommended)
+### Run Locally
 1. **Clone the repository**
    ```bash
    git clone https://github.com/yourname/docuquery-api.git
@@ -50,19 +48,19 @@ A lightweight FastAPI application that allows users to upload PDF documents and 
    # Open .env and add your GEMINI_API_KEY and APP_API_KEY
    ```
 
-3. **Start the application**
+3. **Install dependencies**
    ```bash
-   docker compose up --build
+   pip install -r requirements.txt
+   ```
+
+4. **Start the application**
+   ```bash
+   uvicorn app.main:app --reload --port 8000
    ```
    The API will be available at `http://localhost:8000`.
 
-### Admin Interfaces
-When running via Docker Compose, you can access the following management UIs:
-
-| Service | URL |
-|---------|-----|
-| **FastAPI Swagger Docs** | [http://localhost:8000/docs](http://localhost:8000/docs) |
-| **Redis Commander** | [http://localhost:8081](http://localhost:8081) |
+### Admin Interface
+- **FastAPI Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ## API Endpoints
 
@@ -76,6 +74,8 @@ When running via Docker Compose, you can access the following management UIs:
 
 All endpoints require the `X-API-Key` header with the value of your `APP_API_KEY`.
 
+Rate limits are enforced per `X-API-Key` (falling back to client IP) with a fixed window: **10 req/min** for `/upload`, **30 req/min** for `/ask`, and **60 req/min** for `/upload/status/*` and `/documents`. Set `RATE_LIMIT_ENABLED=false` to disable.
+
 > [!TIP]
 > Interactive API documentation (Swagger UI) is available at `http://localhost:8000/docs`.
 
@@ -87,6 +87,7 @@ All endpoints require the `X-API-Key` header with the value of your `APP_API_KEY
 | `APP_API_KEY`         | **Yes**  | Secret key required for all endpoints (`X-API-Key` header)                  |
 | `REDIS_HOST`          | No       | Hostname for Redis service (default: `redis` for Docker)                    |
 | `REDIS_PORT`          | No       | Port for Redis service (default: `6379`)                                    |
+| `RATE_LIMIT_ENABLED`   | No       | Per-key rate limiting (default: `true`)                                     |
 | `CHROMA_HOST`         | No       | Chroma Cloud hostname (default: `api.trychroma.com`)                        |
 | `CHROMA_PORT`         | No       | Chroma Cloud port (default: `443`)                                          |
 | `CHROMA_API_KEY`      | **Yes**  | API key for your Chroma Cloud tenant                                        |
@@ -111,44 +112,11 @@ pytest -v tests/
 
 Coverage threshold is enforced at 80% minimum via `pytest.ini`.
 
-### Load Testing (Locust)
+## Deployment
 
-Performance tests are located in `tests/locust/`. Two user classes simulate realistic traffic:
+Deployed to [Render](https://render.com/) using a Dockerfile-based **Web Service** for the FastAPI app and a **Background Worker** service running `python -m app.worker`.
 
-- **`DocuQueryUser`**: Uploads a document, then asks questions, tests cache hits, and tests duplicate uploads.
-- **`GatewayUser`**: Tests traffic through the Spring Boot gateway at port 8080.
-
-**Run locally (web UI):**
-```bash
-locust -f tests/locust/locustfile.py --host http://localhost:8000
-# Open http://localhost:8089
-```
-
-**Run headless (CLI):**
-```bash
-locust -f tests/locust/locustfile.py \
-  --host http://localhost:8000 \
-  --users 50 \
-  --spawn-rate 5 \
-  --run-time 3m \
-  --headless \
-  --html locust-report.html
-```
-
-Configuration is in `tests/locust/config.py`. Override the test PDF path with `TEST_PDF_PATH` env var and the target host with `LOCUST_HOST`.
-
-## CI/CD Pipeline
-
-The Jenkinsfile defines a 6-stage declarative pipeline:
-
-1. **Checkout** - pull source
-2. **Run tests** - pytest with venv
-3. **Performance Test** - Locust headless (50 users, 3-minute run, HTML + CSV reports archived)
-4. **Build Docker image** - tagged with build number + `latest`
-5. **Helm lint** - validate chart against dev values
-6. **Deploy to dev** - `helm upgrade --install` with secrets from Jenkins credentials store, rollout verification
-
-On failure the pipeline triggers `helm rollback` automatically.
+The `Dockerfile` exposes the app on port `8000`; set `PORT` and the environment variables in the Render dashboard.
 
 ## Project Structure
 ```text
@@ -177,27 +145,18 @@ docuquery-api/
 │   │   └── vector.py    # Chroma Cloud hybrid search & semantic cache
 │   ├── dependencies.py  # Shared FastAPI dependencies (API key auth)
 │   ├── main.py          # FastAPI entry point with lifespan
+│   ├── rate_limit.py    # Redis-backed per-key rate limiting
 │   └── worker.py        # Background PDF processing worker
-├── docuquery-api/       # Helm Chart for Kubernetes deployment
-│   ├── templates/       # Chart templates (deployment, service, worker)
-│   ├── values.yaml      # Default chart values
-│   ├── values-dev.yaml  # Dev environment overrides
-│   └── values-prod.yaml # Prod environment overrides
 ├── tests/               # Unit & Integration test suite
 │   ├── db/              # Database interaction tests
 │   ├── routes/          # API endpoint tests
 │   ├── services/        # Service logic tests
-│   ├── locust/          # Load testing (Locust)
-│   │   ├── config.py    # Test configuration
-│   │   ├── locustfile.py # User scenarios
-│   │   └── sample.pdf   # Test document
 │   ├── conftest.py      # Shared mocks & fixtures
 │   ├── test_dependencies.py
+│   ├── test_rate_limit.py
 │   └── test_worker_integration.py # E2E background worker test
 ├── logs/                # Application log files (Loguru, 1-day rotation)
 ├── Dockerfile           # Docker configuration (python:3.14)
-├── Jenkinsfile          # CI/CD Pipeline configuration
-├── docker-compose.yml   # Orchestration (API, Worker, Redis, Mongo, Gateway + admin UIs)
 ├── requirements.txt     # Python dependencies
 ├── pytest.ini           # Pytest configuration
 ├── .env.example         # Environment variable template

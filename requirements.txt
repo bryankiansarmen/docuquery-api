@@ -13,4 +13,3 @@ pytest-asyncio
 pytest-mock
 httpx
 pytest-cov
-locust

@@ -30,8 +30,11 @@ def client():
 def mock_redis(mocker):
     mock_redis_client = MagicMock()
     mock_redis_client.get.return_value = None
+    mock_redis_client.incr.return_value = 1
+    mock_redis_client.expire.return_value = True
 
     mocker.patch("app.db.redis.redis_client", mock_redis_client)
+    mocker.patch("app.rate_limit.redis_client", mock_redis_client)
     mocker.patch("app.services.cache.redis_client", mock_redis_client)
     mocker.patch("app.services.stream.redis_client", mock_redis_client)
     
