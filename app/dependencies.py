@@ -1,5 +1,5 @@
 import json, os, hmac
-from fastapi import Request, Security, HTTPException
+from fastapi import Request, Security, HTTPException, Header
 from fastapi.security import APIKeyHeader
 from loguru import logger
 
@@ -43,12 +43,19 @@ def verify_api_key(key: str = Security(API_KEY_HEADER)):
         raise HTTPException(status_code=403, detail="Invalid API key")
 
 
-async def get_tenant_id(request: Request) -> str:
+async def get_tenant_id(
+    request: Request,
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+) -> str:
     """Resolve the tenant/org used to shard data.
 
     When per-tenant keys (APP_API_KEYS) are configured the tenant is derived
-    from the authenticated API key and self-declared headers are rejected.
-    Otherwise the X-Tenant-Id header is used (single shared key mode).
+    from the authenticated API key and the self-declared X-Tenant-Id header is
+    ignored. Otherwise the X-Tenant-Id header is used (single shared key mode).
+
+    Declaring ``X-Tenant-Id`` as a ``Header`` exposes it in the OpenAPI spec and
+    the interactive Swagger UI, so tools like the docs no longer silently fall
+    back to the ``default`` tenant and return empty results.
     """
     key = request.headers.get("X-API-Key") or ""
     if _tenant_api_keys:
@@ -56,4 +63,4 @@ async def get_tenant_id(request: Request) -> str:
         if tenant is None:
             raise HTTPException(status_code=403, detail="Invalid API key")
         return tenant
-    return request.headers.get("X-Tenant-Id") or "default"
+    return x_tenant_id or "default"

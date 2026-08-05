@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
 import os
 from fastapi import FastAPI
-from app.routes import upload, ask, documents
+from fastapi.middleware.cors import CORSMiddleware
+from app.routes import upload, ask, documents, sessions
 from dotenv import load_dotenv
 from loguru import logger
 from app.db.mongo import document_metadata_collection, chat_history_collection
@@ -52,9 +53,20 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="DocuQuery API", lifespan=lifespan)
 logger.add("logs/app.log", rotation="1 day", level="INFO")
 
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(upload.router)
 app.include_router(ask.router)
 app.include_router(documents.router)
+app.include_router(sessions.router)
 
 @app.get("/health")
 async def health_check():
