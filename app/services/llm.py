@@ -1,3 +1,6 @@
+from app.clients.openrouter import OPENROUTER_CHAT_MODEL
+
+
 def build_prompt(question: str, chunks: list[str], history: list[dict]) -> str:
     context = "\n\n".join(chunks)
     history_text = ""
@@ -15,10 +18,11 @@ def build_prompt(question: str, chunks: list[str], history: list[dict]) -> str:
 
     Question: {question}"""
 
+
 def generate_answer(question: str, chunks: list[str], history: list[dict], client):
     prompt = build_prompt(question, chunks, history)
-    response = client.models.generate_content(
-        model="gemini-3-flash-preview",
-        contents=prompt,
+    response = client.chat.completions.create(
+        model=OPENROUTER_CHAT_MODEL,
+        messages=[{"role": "user", "content": prompt}],
     )
-    return response.text
+    return response.choices[0].message.content

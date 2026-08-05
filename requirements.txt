@@ -1,6 +1,6 @@
 fastapi[standard]
 pymupdf
-google-genai
+openai
 python-dotenv
 python-multipart
 chromadb-client>=1.5.0

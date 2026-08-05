@@ -63,3 +63,21 @@ def test_collection_name_shards_by_tenant():
     assert chroma_module.collection_name("documents", None) == "documents_default"
     assert chroma_module.collection_name("documents", "org-1") == "documents_org-1"
     assert chroma_module.collection_name("semantic_cache", "org-1") == "semantic_cache_org-1"
+
+def test_resolve_chroma_schemas_dir(tmp_path):
+    import app.db.chroma as chroma_module
+
+    bundled = tmp_path / "bundled"
+    bundled.mkdir()
+
+    # Falls back to the bundled schemas when the wheel schema dir is absent.
+    missing = str(tmp_path / "missing")
+    assert chroma_module.resolve_chroma_schemas_dir(missing, bundled) == str(bundled)
+
+    # Prefers the wheel schema dir (no bundled copy shipped) when both absent returns real.
+    assert chroma_module.resolve_chroma_schemas_dir(missing, tmp_path / "nope") == missing
+
+    # Prefers the real (wheel) schema dir when it exists.
+    real = tmp_path / "real"
+    real.mkdir()
+    assert chroma_module.resolve_chroma_schemas_dir(str(real), bundled) == str(real)

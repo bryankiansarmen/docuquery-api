@@ -6,7 +6,9 @@ import os
 import sys
 
 os.environ["APP_API_KEY"] = "test-api-key"
-os.environ["GEMINI_API_KEY"] = "test-gemini-key"
+os.environ["OPENROUTER_API_KEY"] = "test-openrouter-key"
+os.environ["OPENROUTER_CHAT_MODEL"] = "deepseek/deepseek-chat"
+os.environ["OPENROUTER_EMBEDDING_MODEL"] = "baai/bge-m3"
 
 sys.modules['redis'] = MagicMock()
 sys.modules['chromadb'] = MagicMock()
@@ -20,7 +22,7 @@ sys.modules['motor.motor_asyncio'] = MagicMock()
 
 
 from app.main import app
-from app.clients import gemini as gemini_mod
+from app.clients import openrouter as openrouter_mod
 
 @pytest.fixture
 def client():
@@ -78,18 +80,20 @@ def mock_mongo(mocker):
     }
 
 @pytest.fixture(autouse=True, scope="function")
-def mock_gemini(mocker):
+def mock_openrouter(mocker):
     mock_client = MagicMock()
-    
-    # Mock embedding and generation defaults
-    mock_response = MagicMock()
-    mock_response.text = "Mocked answer"
-    mock_client.models.generate_content.return_value = mock_response
-    
-    mock_embed_result = MagicMock()
-    mock_embed_result.embeddings = [MagicMock(values=[0.1, 0.2, 0.3])]
-    mock_client.models.embed_content.return_value = mock_embed_result
 
-    mocker.patch.object(gemini_mod, "gemini_client", mock_client)
-    
+    # Mock chat completion defaults
+    mock_completion = MagicMock()
+    mock_completion.choices[0].message.content = "Mocked answer"
+    mock_client.chat.completions.create.return_value = mock_completion
+
+    # Mock embedding defaults
+    mock_embed = MagicMock()
+    mock_embed.data = [MagicMock(index=0, embedding=[0.1, 0.2, 0.3])]
+    mock_client.embeddings.create.return_value = mock_embed
+
+    mocker.patch.object(openrouter_mod, "openrouter_client", mock_client)
+    mocker.patch.object(openrouter_mod, "_embedding_client", mock_client)
+
     return mock_client

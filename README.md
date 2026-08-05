@@ -1,16 +1,16 @@
 # DocuQuery API
 
-A lightweight FastAPI application that allows users to upload PDF documents and ask questions about their content using Google Gemini AI, with hybrid search, persistent vector storage, and caching.
+A lightweight FastAPI application that allows users to upload PDF documents and ask questions about their content using OpenRouter-hosted LLMs, with hybrid search, persistent vector storage, and caching.
 
 ## Features
 - **Asynchronous PDF Processing**: Documents are processed in the background using **Redis Streams** and a dedicated worker, ensuring fast API responses.
 - **Hybrid Search (RRF)**: Combines **Splade sparse search** and **vector similarity search** using **Chroma Cloud** (Reciprocal Rank Fusion) for superior retrieval accuracy, de-duplicating related sections from the same document via GroupBy.
-- **Semantic Vector Search**: Stores embeddings in **Chroma Cloud** (server-side Qwen dense + Splade sparse embeddings) for fast context retrieval.
+- **Semantic Vector Search**: Stores embeddings in **Chroma Cloud** (client-side OpenRouter `bge-m3` dense + server-side Splade sparse embeddings) for fast context retrieval.
 - **Hybrid Caching System**:
   - **Exact Cache**: Redis-based caching for identical questions with SHA-256 hashing, 1hr TTL.
   - **Semantic Cache**: Chroma Cloud-based caching for semantically similar questions using a similarity score threshold of 0.3.
 - **Persistent Chat History**: Stores user-bot interactions in **MongoDB** using `motor` for asynchronous access, with 10-turn conversation context.
-- **Contextual Q&A**: Uses **Google Gemini 3 Flash** to generate answers while maintaining conversation state across sessions.
+- **Contextual Q&A**: Uses an OpenRouter chat model (configurable via `OPENROUTER_CHAT_MODEL`, default `deepseek/deepseek-chat`) to generate answers while maintaining conversation state across sessions.
 - **Resilient Sessions**: Recovers active document metadata from Redis if the application restarts.
 - **Duplicate Document Detection**: SHA-256 fingerprinting prevents re-processing the same document.
 - **Per-Key Rate Limiting**: Redis-backed fixed-window rate limiting per `X-API-Key` (falls back to client IP) enforced directly in the API.
@@ -23,8 +23,8 @@ A lightweight FastAPI application that allows users to upload PDF documents and 
 - **Document Store & Chat History**: [MongoDB](https://www.mongodb.com/) (Motor + PyMongo drivers)
 - **Caching & Job Status**: [Redis](https://redis.io/)
 - **PDF Processing**: [PyMuPDF](https://pymupdf.readthedocs.io/)
-- **AI Model**: [Google Gemini API](https://ai.google.dev/) (Gemini 3 Flash)
-- **Embedding Model**: Server-side Qwen 3 Embedding (dense) + Splade (sparse) via Chroma Cloud
+- **AI Model**: [OpenRouter](https://openrouter.ai/) chat completions (default: `deepseek/deepseek-chat`)
+- **Embedding Model**: [OpenRouter `BAAI/bge-m3`](https://openrouter.ai/baai/bge-m3) (dense) + Splade (sparse) via Chroma Cloud
 - **Logger**: [Loguru](https://github.com/Delgan/loguru)
 - **Containerization**: [Docker](https://www.docker.com/)
 - **Deployment**: [Render](https://render.com/) (Web Service + Background Worker)
@@ -45,7 +45,7 @@ A lightweight FastAPI application that allows users to upload PDF documents and 
 2. **Setup environment variables**
    ```bash
    cp .env.example .env
-   # Open .env and add your GEMINI_API_KEY and APP_API_KEY
+   # Open .env and add your OPENROUTER_API_KEY and APP_API_KEY
    ```
 
 3. **Install dependencies**
@@ -83,7 +83,9 @@ Rate limits are enforced per `X-API-Key` (falling back to client IP) with a fixe
 
 | Variable              | Required | Description                                                                 |
 |-----------------------|----------|-----------------------------------------------------------------------------|
-| `GEMINI_API_KEY`      | **Yes**  | Your Google Gemini API Key from [Google AI Studio](https://aistudio.google.com/app/apikey) |
+| `OPENROUTER_API_KEY`  | **Yes**  | Your [OpenRouter API key](https://openrouter.ai/keys)                       |
+| `OPENROUTER_CHAT_MODEL`| No      | Chat model for answer generation (default: `deepseek/deepseek-chat`)        |
+| `OPENROUTER_EMBEDDING_MODEL`| No | Embedding model (default: `baai/bge-m3`)                      |
 | `APP_API_KEY`         | **Yes**  | Secret key required for all endpoints (`X-API-Key` header)                  |
 | `REDIS_HOST`          | No       | Hostname for Redis service (default: `redis` for Docker)                    |
 | `REDIS_PORT`          | No       | Port for Redis service (default: `6379`)                                    |
@@ -123,7 +125,7 @@ The `Dockerfile` exposes the app on port `8000`; set `PORT` and the environment 
 docuquery-api/
 ├── app/
 │   ├── clients/         # External API clients
-│   │   └── gemini.py    # Gemini API client
+│   │   └── openrouter.py # OpenRouter API client (chat + bge-m3 embeddings)
 │   ├── db/              # Database connection logic
 │   │   ├── chroma.py    # Chroma Cloud client & schema
 │   │   ├── mongo.py     # MongoDB client (motor + pymongo)
@@ -138,7 +140,7 @@ docuquery-api/
 │   │   ├── cache.py     # Redis exact-match caching
 │   │   ├── chat.py      # MongoDB chat history
 │   │   ├── document.py  # Document metadata service (MongoDB)
-│   │   ├── gemini.py    # Gemini API integration
+│   │   ├── llm.py       # Prompt building & OpenRouter answer generation
 │   │   ├── pdf.py       # PDF text extraction & chunking
 │   │   ├── store.py     # In-memory document store
 │   │   ├── stream.py    # Redis Stream job orchestration
