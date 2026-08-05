@@ -3,14 +3,14 @@ from fastapi import APIRouter, UploadFile, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from app.services.stream import publish_upload_job, get_job_status
 from app.models.schemas import JobStatus
-from app.dependencies import verify_api_key
+from app.dependencies import verify_api_key, get_tenant_id
 from app.services.store import DOCUMENT_STORE
 from app.services.cache import get_document_metadata as get_redis_metadata
 
 router = APIRouter()
 
 @router.post("/upload", dependencies=[Depends(verify_api_key)], status_code=202)
-async def upload_document(file: UploadFile):
+async def upload_document(file: UploadFile, tenant_id: str = Depends(get_tenant_id)):
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
 
@@ -34,7 +34,7 @@ async def upload_document(file: UploadFile):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp.write(file_bytes)
         temp_path = tmp.name
-    job_id = publish_upload_job(document_id, file.filename, temp_path)
+    job_id = publish_upload_job(document_id, file.filename, temp_path, tenant_id)
 
     return {
         "message": "Document accepted for processing",

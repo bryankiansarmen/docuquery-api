@@ -5,15 +5,14 @@ from app.services.stream import STREAM_KEY, CONSUMER_GROUP, CONSUMER_NAME, save_
 from app.services.pdf import extract_text_from_pdf, chunk_text
 from app.services.vector import store_document_chunks
 from app.services.document import save_document_metadata_sync
-from app.clients.gemini import gemini_client
 from app.models.schemas import DocumentMetadata, JobStatus
-from app.services.elasticsearch import index_chunks
 
 def process_job(message_id: str, data: dict):
     job_id = data["job_id"]
     file_name = data["file_name"]
     temp_path = data["temp_path"]
     document_id = data["document_id"]
+    tenant_id = data.get("tenant_id", "default")
 
     logger.info(f"Processing job {job_id} for {file_name}")
     save_job_status(job_id, JobStatus.processing)
@@ -24,14 +23,14 @@ def process_job(message_id: str, data: dict):
 
         content, page_count = extract_text_from_pdf(file_bytes)
         chunks = chunk_text(content)
-        store_document_chunks(chunks, file_name, gemini_client, document_id)
-        index_chunks(chunks, file_name, document_id, gemini_client)
+        store_document_chunks(chunks, file_name, document_id, tenant_id)
 
         metadata = DocumentMetadata(
             document_id=document_id,
             file_name=file_name,
             page_count=page_count,
-            chunk_count=len(chunks)
+            chunk_count=len(chunks),
+            user_id=tenant_id,
         )
         save_document_metadata_sync(metadata)
 

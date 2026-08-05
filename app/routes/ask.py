@@ -7,15 +7,14 @@ from app.services.gemini import generate_answer
 from app.services.vector import search_document_chunks, get_semantic_question_cache, save_semantic_question_cache
 from app.services.cache import create_answer_key, get_answer_cache, save_answer_cache, get_active_document
 from app.services.chat import get_chat_history, save_chat_turn
-from app.services.elasticsearch import hybrid_search
-from app.dependencies import verify_api_key
+from app.dependencies import verify_api_key, get_tenant_id
 from loguru import logger
 import uuid
 
 router = APIRouter()
 
 @router.post("/ask", dependencies=[Depends(verify_api_key)])
-async def ask_question(question: Question):
+async def ask_question(question: Question, tenant_id: str = Depends(get_tenant_id)):
     # resolve active document
     file_name = DOCUMENT_STORE.get("file_name")
     if not file_name:
@@ -28,17 +27,20 @@ async def ask_question(question: Question):
     if not file_name:
         raise HTTPException(status_code=400, detail="No document uploaded yet. Please upload a PDF first.")
 
+    document_id = DOCUMENT_STORE.get("document_id")
     session_id = question.session_id or str(uuid.uuid4())
 
     # check exact cache first
-    cache_key = create_answer_key(question.message, file_name)
+    cache_key = create_answer_key(question.message, file_name, tenant_id)
     cached_response = get_answer_cache(cache_key)
     if cached_response:
         logger.info(f"Exact cache hit: {question.message}")
         return cached_response
 
     # check semantic cache
-    semantic_question_cached = get_semantic_question_cache(question.message, file_name, gemini_client)
+    semantic_question_cached = get_semantic_question_cache(
+        question.message, file_name, tenant_id=tenant_id
+    )
     if semantic_question_cached:
         logger.info(f"Semantic question cache hit: {question.message}")
         return {
@@ -54,16 +56,20 @@ async def ask_question(question: Question):
     try:
         history = await get_chat_history(file_name, session_id)
 
-        chunks = hybrid_search(question.message, file_name, gemini_client)
+        chunks = search_document_chunks(
+            question.message,
+            tenant_id=tenant_id,
+            n=5,
+            document_id=document_id,
+        )
         if not chunks:
-            logger.warning("Elasticsearch unavailable, falling back to ChromaDB")
-            chunks = search_document_chunks(question.message, gemini_client)
+            logger.warning("No chunks retrieved for question")
 
         answer = generate_answer(question.message, chunks, history, gemini_client)
 
         await save_chat_turn(file_name, session_id, question.message, answer)
         save_answer_cache(cache_key, answer)
-        save_semantic_question_cache(question.message, answer, file_name, gemini_client)
+        save_semantic_question_cache(question.message, answer, file_name, tenant_id=tenant_id)
 
         return {
             "answer": answer,

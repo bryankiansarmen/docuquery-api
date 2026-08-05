@@ -6,7 +6,12 @@ STREAM_KEY = "docquery:upload_jobs"
 CONSUMER_GROUP = "upload_worker"
 CONSUMER_NAME = "worker_1"
 
-def publish_upload_job(document_id: str, file_name: str, temp_path: str) -> str:
+def publish_upload_job(
+    document_id: str,
+    file_name: str,
+    temp_path: str,
+    tenant_id: str | None = None,
+) -> str:
     if not redis_client:
         raise RuntimeError("Redis client not initialized")
     
@@ -15,7 +20,8 @@ def publish_upload_job(document_id: str, file_name: str, temp_path: str) -> str:
         "job_id": job_id,
         "document_id": document_id,
         "file_name": file_name,
-        "temp_path": temp_path
+        "temp_path": temp_path,
+        "tenant_id": tenant_id or "default",
     })
 
     logger.info(f"Published upload job: {job_id} for {file_name}")

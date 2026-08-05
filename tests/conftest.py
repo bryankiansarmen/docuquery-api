@@ -10,9 +10,13 @@ os.environ["GEMINI_API_KEY"] = "test-gemini-key"
 
 sys.modules['redis'] = MagicMock()
 sys.modules['chromadb'] = MagicMock()
+sys.modules['chromadb.utils'] = MagicMock()
+sys.modules['chromadb.utils.embedding_functions'] = MagicMock()
+sys.modules['chromadb.execution'] = MagicMock()
+sys.modules['chromadb.execution.expression'] = MagicMock()
+sys.modules['chromadb.execution.expression.operator'] = MagicMock()
 sys.modules['motor'] = MagicMock()
 sys.modules['motor.motor_asyncio'] = MagicMock()
-sys.modules['elasticsearch'] = MagicMock()
 
 
 from app.main import app

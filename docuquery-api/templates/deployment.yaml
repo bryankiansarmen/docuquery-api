@@ -79,8 +79,15 @@ spec:
               value: {{ .Values.chroma.host }}
             - name: CHROMA_PORT
               value: {{ .Values.chroma.port | quote }}
-            - name: ELASTICSEARCH_URL
-              value: {{ .Values.elasticsearch.url }}
+            - name: CHROMA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: docuquery
+                  key: chroma-api-key
+            - name: CHROMA_TENANT
+              value: {{ .Values.chroma.tenant }}
+            - name: CHROMA_DATABASE
+              value: {{ .Values.chroma.database }}
           readinessProbe:
             httpGet:
               path: {{ .Values.app.healthPath }}

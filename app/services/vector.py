@@ -1,92 +1,172 @@
 from loguru import logger
-from app.db.chroma import document_collection, semantic_cache_collection
 import hashlib
+from chromadb import Search, K, Knn, Rrf
+from chromadb.execution.expression.operator import GroupBy, MinK
 
-def store_document_chunks(chunks: list[dict], file_name: str, client, document_id: str = None):
-    if not document_collection:
+from app.db.chroma import (
+    SPARSE_INDEX_KEY,
+    document_collection,
+    semantic_cache_collection,
+    get_document_collection,
+    get_semantic_cache_collection,
+)
+
+DENSE_LIMIT = 200
+RRF_K = 60
+RRF_WEIGHTS = [0.7, 0.3]
+
+
+def _document_collection(tenant_id: str | None = None):
+    # Prefer the caller-provided (sharded) collection, fall back to the default one.
+    return get_document_collection(tenant_id) if tenant_id else document_collection
+
+
+def _semantic_cache_collection(tenant_id: str | None = None):
+    return get_semantic_cache_collection(tenant_id) if tenant_id else semantic_cache_collection
+
+
+def store_document_chunks(
+    chunks: list[dict],
+    file_name: str,
+    document_id: str = None,
+    tenant_id: str | None = None,
+):
+    """Index document chunks into the (per-tenant) documents collection.
+
+    Dense embeddings are generated via Chroma Cloud Qwen and sparse embeddings
+    via Chroma Cloud Splade automatically from the collection Schema.
+    """
+    collection = _document_collection(tenant_id)
+    if not collection:
         logger.error("ChromaDB not available, skipping storage.")
         return
 
-    success_count = 0
+    source_id = document_id or file_name
+    ids = []
+    documents = []
+    metadatas = []
     for chunk in chunks:
-        try:
-            result = client.models.embed_content(
-                model="gemini-embedding-001",
-                contents=chunk["text"]
-            )
-            prefix = document_id if document_id else file_name
-            document_collection.add(
-                ids=[f"{prefix}-{chunk['index']}"],
-                embeddings=[result.embeddings[0].values],
-                documents=[chunk["text"]],
-                metadatas=[{"source": file_name, "index": chunk["index"]}]
-            )
-            success_count += 1
-        except Exception as e:
-            logger.error(f"Error storing chunk {chunk['index']}: {e}")
+        chunk_index = chunk["index"]
+        ids.append(f"{source_id}-{chunk_index}")
+        documents.append(chunk["text"])
+        # document_id + chunk_index metadata enable GroupBy deduplication.
+        metadatas.append({
+            "source": file_name,
+            "document_id": source_id,
+            "chunk_index": chunk_index,
+        })
 
-    logger.info(f"Stored {success_count}/{len(chunks)} chunks for {file_name}")
+    try:
+        collection.add(ids=ids, documents=documents, metadatas=metadatas)
+        logger.info(f"Stored {len(chunks)} chunks for {file_name}")
+    except Exception as e:
+        logger.error(f"Error storing chunks: {e}")
 
-def search_document_chunks(question: str, client, n=5) -> list[str]:
-    if not document_collection:
+
+def search_document_chunks(
+    question: str,
+    tenant_id: str | None = None,
+    n: int = 5,
+    document_id: str | None = None,
+) -> list[str]:
+    """Hybrid search (RRF) over dense + sparse embeddings.
+
+    Results are deduplicated across chunks of the same source document using
+    GroupBy on the ``document_id`` metadata key (one chunk per document).
+    """
+    collection = _document_collection(tenant_id)
+    if not collection:
         logger.error("ChromaDB not available, skipping search.")
         return []
 
     try:
-        result = client.models.embed_content(
-            model="gemini-embedding-001",
-            contents=question
+        dense_rank = Knn(
+            query=question, key=K.EMBEDDING, return_rank=True, limit=DENSE_LIMIT
         )
-        results = document_collection.query(
-            query_embeddings=[result.embeddings[0].values],
-            n_results=n
+        sparse_rank = Knn(
+            query=question, key=SPARSE_INDEX_KEY, return_rank=True, limit=DENSE_LIMIT
         )
-        return results["documents"][0] if results["documents"] else []
+        hybrid_rank = Rrf(
+            ranks=[dense_rank, sparse_rank], weights=RRF_WEIGHTS, k=RRF_K
+        )
+
+        search = (
+            Search()
+            .rank(hybrid_rank)
+            .group_by(
+                GroupBy(
+                    keys=K("document_id"),
+                    aggregate=MinK(keys=K.SCORE, k=1),
+                )
+            )
+            .limit(n)
+            .select(K.DOCUMENT, K.SCORE, "document_id", "chunk_index", "source")
+        )
+        if document_id:
+            search = search.where(K("document_id") == document_id)
+
+        results = collection.search(search)
+        rows = results.rows()[0] if getattr(results, "rows", None) and results.rows() else []
+        return [row["document"] for row in rows]
     except Exception as e:
         logger.error(f"Error searching chunks: {e}")
         return []
 
-def get_semantic_question_cache(question: str, file_name: str, client, threshold=0.3) -> dict | None:
-    if not semantic_cache_collection:
+
+def get_semantic_question_cache(
+    question: str,
+    file_name: str,
+    tenant_id: str | None = None,
+    threshold: float = 0.3,
+) -> dict | None:
+    collection = _semantic_cache_collection(tenant_id)
+    if not collection:
         return None
 
     try:
-        result = client.models.embed_content(
-            model="gemini-embedding-001",
-            contents=question
-        )
-        results = semantic_cache_collection.query(
-            query_embeddings=[result.embeddings[0].values],
-            n_results=1,
-            where={"source": file_name}
+        search = (
+            Search()
+            .where(K("source") == file_name)
+            .rank(Knn(query=question, key=K.EMBEDDING))
+            .limit(1)
+            .select(K.DOCUMENT, K.SCORE, "source", "question")
         )
 
-        if results["documents"] and results["distances"] and results["distances"][0][0] < threshold:
-            logger.info(f"Semantic cache hit (distance: {results['distances'][0][0]:.4f})")
+        results = collection.search(search)
+        rows = results.rows()[0] if getattr(results, "rows", None) and results.rows() else []
+        if not rows:
+            return None
+
+        row = rows[0]
+        score = row.get("score")
+        if score is not None and score < threshold:
+            logger.info(f"Semantic cache hit (distance: {score:.4f})")
             return {
-                "answer": results["documents"][0][0],
-                "metadata": results["metadatas"][0][0]
+                "answer": row.get("document"),
+                "metadata": row.get("metadata", {}),
             }
         return None
     except Exception as e:
         logger.error(f"Error checking semantic cache: {e}")
         return None
 
-def save_semantic_question_cache(question: str, answer: str, file_name: str, client):
-    if not semantic_cache_collection:
+
+def save_semantic_question_cache(
+    question: str,
+    answer: str,
+    file_name: str,
+    tenant_id: str | None = None,
+):
+    collection = _semantic_cache_collection(tenant_id)
+    if not collection:
         return
 
     try:
-        cache_id = hashlib.sha256(f"{question}{file_name}".encode()).hexdigest()
-        result = client.models.embed_content(
-            model="gemini-embedding-001",
-            contents=question
-        )
-        semantic_cache_collection.upsert(
+        cache_id = hashlib.sha256(f"{question}{file_name}{tenant_id or ''}".encode()).hexdigest()
+        collection.upsert(
             ids=[cache_id],
-            embeddings=[result.embeddings[0].values],
             documents=[answer],
-            metadatas=[{"question": question, "source": file_name}]
+            metadatas=[{"question": question, "source": file_name}],
         )
         logger.info(f"Saved to semantic cache: {question[:50]}...")
     except Exception as e:

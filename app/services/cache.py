@@ -2,8 +2,8 @@ import hashlib, json
 from loguru import logger
 from app.db.redis import redis_client
 
-def create_answer_key(question: str, file_name: str) -> str:
-    return hashlib.sha256(f"{question}{file_name}".encode()).hexdigest()
+def create_answer_key(question: str, file_name: str, tenant_id: str | None = None) -> str:
+    return hashlib.sha256(f"{question}{file_name}{tenant_id or ''}".encode()).hexdigest()
 
 def get_answer_cache(key: str):
     if not redis_client: return None

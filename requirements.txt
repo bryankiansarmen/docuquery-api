@@ -3,7 +3,7 @@ pymupdf
 google-genai
 python-dotenv
 python-multipart
-chromadb-client
+chromadb-client>=1.5.0
 redis
 loguru
 motor
@@ -12,6 +12,5 @@ pytest
 pytest-asyncio
 pytest-mock
 httpx
-elasticsearch>=8.0.0
 pytest-cov
 locust

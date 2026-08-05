@@ -4,11 +4,11 @@ A lightweight FastAPI application that allows users to upload PDF documents and 
 
 ## Features
 - **Asynchronous PDF Processing**: Documents are processed in the background using **Redis Streams** and a dedicated worker, ensuring fast API responses.
-- **Hybrid Search (RRF)**: Combines **BM25 keyword search** and **vector similarity search** using **Elasticsearch** (Reciprocal Rank Fusion) for superior retrieval accuracy. Falls back to ChromaDB-only vector search if Elasticsearch is unavailable.
-- **Semantic Vector Search**: Stores embeddings in **ChromaDB** for fast context retrieval.
+- **Hybrid Search (RRF)**: Combines **Splade sparse search** and **vector similarity search** using **Chroma Cloud** (Reciprocal Rank Fusion) for superior retrieval accuracy, de-duplicating related sections from the same document via GroupBy.
+- **Semantic Vector Search**: Stores embeddings in **Chroma Cloud** (server-side Qwen dense + Splade sparse embeddings) for fast context retrieval.
 - **Hybrid Caching System**:
   - **Exact Cache**: Redis-based caching for identical questions with SHA-256 hashing, 1hr TTL.
-  - **Semantic Cache**: ChromaDB-based caching for semantically similar questions using cosine distance < 0.3 threshold.
+  - **Semantic Cache**: Chroma Cloud-based caching for semantically similar questions using a similarity score threshold of 0.3.
 - **Persistent Chat History**: Stores user-bot interactions in **MongoDB** using `motor` for asynchronous access, with 10-turn conversation context.
 - **Contextual Q&A**: Uses **Google Gemini 3 Flash** to generate answers while maintaining conversation state across sessions.
 - **Resilient Sessions**: Recovers active document metadata from Redis if the application restarts.
@@ -17,14 +17,13 @@ A lightweight FastAPI application that allows users to upload PDF documents and 
 ## Tech Stack
 - **API Framework**: [FastAPI](https://fastapi.tiangolo.com/) (Asynchronous)
 - **Background Worker**: Python-based worker using Redis Streams for job orchestration.
-- **Hybrid Search Engine**: [Elasticsearch](https://www.elastic.co/elasticsearch/) (BM25 + Vector RRF)
-- **Vector Search Engine**: [ChromaDB](https://www.trychroma.com/)
+- **Hybrid Search Engine**: [Chroma Cloud](https://www.trychroma.com/) (dense + sparse with RRF)
+- **Vector Search Engine**: [Chroma Cloud](https://www.trychroma.com/)
 - **Document Store & Chat History**: [MongoDB](https://www.mongodb.com/) (Motor + PyMongo drivers)
 - **Caching & Job Status**: [Redis](https://redis.io/)
-- **Data Visualization**: [Kibana](https://www.elastic.co/kibana/)
 - **PDF Processing**: [PyMuPDF](https://pymupdf.readthedocs.io/)
 - **AI Model**: [Google Gemini API](https://ai.google.dev/) (Gemini 3 Flash)
-- **Embedding Model**: `gemini-embedding-001`
+- **Embedding Model**: Server-side Qwen 3 Embedding (dense) + Splade (sparse) via Chroma Cloud
 - **Logger**: [Loguru](https://github.com/Delgan/loguru)
 - **API Gateway**: Spring Boot gateway with routing + rate limiting (separate repo)
 - **Containerization**: [Docker](https://www.docker.com/)
@@ -36,7 +35,7 @@ A lightweight FastAPI application that allows users to upload PDF documents and 
 
 ### Prerequisites
 - [Docker](https://www.docker.com/get-started/) & [Docker Compose](https://docs.docker.com/compose/install/)
-- OR Python 3.10+ (local setup requires running ChromaDB, Redis, MongoDB, and Elasticsearch separately)
+- OR Python 3.10+ (local setup requires running Redis, MongoDB, and a Chroma Cloud account separately)
 
 ### Run with Docker Compose (Recommended)
 1. **Clone the repository**
@@ -63,9 +62,7 @@ When running via Docker Compose, you can access the following management UIs:
 | Service | URL |
 |---------|-----|
 | **FastAPI Swagger Docs** | [http://localhost:8000/docs](http://localhost:8000/docs) |
-| **ChromaDB Admin** | [http://localhost:8082](http://localhost:8082) |
 | **Redis Commander** | [http://localhost:8081](http://localhost:8081) |
-| **Kibana (ES Monitoring)** | [http://localhost:5601](http://localhost:5601) |
 
 ## API Endpoints
 
@@ -90,10 +87,17 @@ All endpoints require the `X-API-Key` header with the value of your `APP_API_KEY
 | `APP_API_KEY`         | **Yes**  | Secret key required for all endpoints (`X-API-Key` header)                  |
 | `REDIS_HOST`          | No       | Hostname for Redis service (default: `redis` for Docker)                    |
 | `REDIS_PORT`          | No       | Port for Redis service (default: `6379`)                                    |
-| `CHROMA_HOST`         | No       | Hostname for ChromaDB service (default: `chromadb` for Docker)              |
-| `CHROMA_PORT`         | No       | Port for ChromaDB service (default: `8000`)                                 |
-| `MONGO_URL`           | No       | MongoDB connection string (default: `mongodb://mongodb:27017`)              |
-| `ELASTICSEARCH_URL`   | No       | Elasticsearch connection URL (default: `http://elasticsearch:9200`)         |
+| `CHROMA_HOST`         | No       | Chroma Cloud hostname (default: `api.trychroma.com`)                        |
+| `CHROMA_PORT`         | No       | Chroma Cloud port (default: `443`)                                          |
+| `CHROMA_API_KEY`      | **Yes**  | API key for your Chroma Cloud tenant                                        |
+| `CHROMA_TENANT`       | **Yes**  | Chroma Cloud tenant ID (e.g. from the console SDK snippet)                  |
+| `CHROMA_DATABASE`     | No       | Chroma Cloud database name (default: `docuquery`)                           |
+| `MONGO_URL`           | No       | Explicit MongoDB connection string override (overrides composed URI)        |
+| `MONGO_HOST`          | No       | MongoDB host (default: `mongodb`; Atlas uses e.g. `cluster0.xxx.mongodb.net`) |
+| `MONGO_PORT`          | No       | MongoDB port (default: `27017`)                                             |
+| `MONGO_SRV`           | No       | Use `mongodb+srv` scheme when `true` (Atlas DNS-based clusters)             |
+| `MONGO_USERNAME`      | No       | MongoDB username; combined with `MONGO_PASSWORD` to build the connection URI |
+| `MONGO_PASSWORD`      | No       | MongoDB password                                                            |
 
 ## Testing
 
@@ -153,8 +157,7 @@ docuquery-api/
 │   ├── clients/         # External API clients
 │   │   └── gemini.py    # Gemini API client
 │   ├── db/              # Database connection logic
-│   │   ├── chroma.py    # ChromaDB client
-│   │   ├── elasticsearch.py # Elasticsearch client
+│   │   ├── chroma.py    # Chroma Cloud client & schema
 │   │   ├── mongo.py     # MongoDB client (motor + pymongo)
 │   │   └── redis.py     # Redis client
 │   ├── models/
@@ -167,12 +170,11 @@ docuquery-api/
 │   │   ├── cache.py     # Redis exact-match caching
 │   │   ├── chat.py      # MongoDB chat history
 │   │   ├── document.py  # Document metadata service (MongoDB)
-│   │   ├── elasticsearch.py # Hybrid RRF search (BM25 + kNN)
 │   │   ├── gemini.py    # Gemini API integration
 │   │   ├── pdf.py       # PDF text extraction & chunking
 │   │   ├── store.py     # In-memory document store
 │   │   ├── stream.py    # Redis Stream job orchestration
-│   │   └── vector.py    # ChromaDB vector indexing & semantic cache
+│   │   └── vector.py    # Chroma Cloud hybrid search & semantic cache
 │   ├── dependencies.py  # Shared FastAPI dependencies (API key auth)
 │   ├── main.py          # FastAPI entry point with lifespan
 │   └── worker.py        # Background PDF processing worker
@@ -195,7 +197,7 @@ docuquery-api/
 ├── logs/                # Application log files (Loguru, 1-day rotation)
 ├── Dockerfile           # Docker configuration (python:3.14)
 ├── Jenkinsfile          # CI/CD Pipeline configuration
-├── docker-compose.yml   # Orchestration (10 services: API, Worker, Redis, Mongo, Chroma, ES, Kibana, Gateway + admin UIs)
+├── docker-compose.yml   # Orchestration (API, Worker, Redis, Mongo, Gateway + admin UIs)
 ├── requirements.txt     # Python dependencies
 ├── pytest.ini           # Pytest configuration
 ├── .env.example         # Environment variable template
