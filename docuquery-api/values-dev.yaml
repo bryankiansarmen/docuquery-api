@@ -1,6 +1,0 @@
-redis:
-  host: redis-master
-  port: 6379
-
-mongo:
-  url: "mongodb://$(MONGO_USER):$(MONGO_PASSWORD)@mongodb:27017/docuquery"
