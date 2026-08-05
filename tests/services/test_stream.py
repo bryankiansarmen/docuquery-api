@@ -5,16 +5,25 @@ from app.services.stream import publish_upload_job, create_consumer_group, get_j
 def test_publish_upload_job(mock_redis):
     document_id = "test-doc"
     file_name = "test.pdf"
-    temp_path = "/tmp/test.pdf"
-    
-    job_id = publish_upload_job(document_id, file_name, temp_path)
-    
+    file_bytes = b"%PDF-1.4 fake pdf"
+
+    job_id = publish_upload_job(document_id, file_name, file_bytes)
+
     assert job_id is not None
     mock_redis.xadd.assert_called_once()
     args = mock_redis.xadd.call_args[0]
     assert args[0] == STREAM_KEY
     assert args[1]["document_id"] == document_id
     assert args[1]["job_id"] == job_id
+    # file bytes travel in the job payload (cross-host safe)
+    import base64
+    assert base64.b64decode(args[1]["file_bytes"]) == file_bytes
+
+    # A pending status is written immediately so status polls never 404.
+    mock_redis.setex.assert_called_once()
+    status_args = mock_redis.setex.call_args[0]
+    assert status_args[0] == f"job:{job_id}"
+    assert json.loads(status_args[2])["status"] == "pending"
 
 def test_create_consumer_group_new(mock_redis):
     create_consumer_group()

@@ -28,10 +28,12 @@ async def test_get_document_metadata(mock_mongo):
 async def test_get_all_document_metadata(mock_mongo):
     mock_cursor = MagicMock()
     mock_cursor.sort.return_value = mock_cursor
+    mock_cursor.skip.return_value = mock_cursor
+    mock_cursor.limit.return_value = mock_cursor
     mock_cursor.to_list = AsyncMock(return_value=[{"document_id": "doc123"}])
     mock_mongo["document"].find.return_value = mock_cursor
-    
+
     result = await get_all_document_metadata()
-    
+
     assert len(result) == 1
     assert result[0]["document_id"] == "doc123"

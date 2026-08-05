@@ -9,14 +9,14 @@ DEFAULT_OVERLAP_LINES = 2
 def extract_text_from_pdf(file_stream: bytes) -> tuple[str, int]:
     document = pymupdf.open(stream=file_stream, filetype="pdf")
 
-    all_text = ""
+    pages = []
     for page in document:
-        all_text += page.get_text()
+        pages.append(page.get_text())
 
     page_count = len(document)
     document.close()
 
-    return all_text, page_count
+    return "".join(pages), page_count
 
 
 def _split_long_line(line: str, max_bytes: int) -> list[str]:

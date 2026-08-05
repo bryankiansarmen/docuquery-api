@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import os
 from fastapi import FastAPI
 from app.routes import upload, ask, documents
 from dotenv import load_dotenv
@@ -8,32 +9,43 @@ from app.services.stream import create_consumer_group
 
 load_dotenv()
 
+CHAT_HISTORY_TTL_DAYS = int(os.getenv("CHAT_HISTORY_TTL_DAYS", "90"))
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
         # Create MongoDB indexes
         if document_metadata_collection is not None:
+            # Drop the legacy single-field unique index (document_id was globally
+            # unique); the same file may now exist per-tenant.
+            try:
+                await document_metadata_collection.drop_index("document_id_1")
+            except Exception:
+                pass
             await document_metadata_collection.create_index(
-                [("document_id", 1)], unique=True, background=True
+                [("document_id", 1), ("user_id", 1)], unique=True
             )
             await document_metadata_collection.create_index(
-                [("uploaded_at", -1)], background=True
+                [("uploaded_at", -1)]
             )
             logger.info("Indexes created for document_metadata_collection")
 
         if chat_history_collection is not None:
             await chat_history_collection.create_index(
-                [("document_id", 1), ("session_id", 1), ("timestamp", -1)],
-                background=True
+                [("document_id", 1), ("session_id", 1), ("timestamp", -1)]
             )
+            if CHAT_HISTORY_TTL_DAYS > 0:
+                await chat_history_collection.create_index(
+                    [("timestamp", 1)], expireAfterSeconds=CHAT_HISTORY_TTL_DAYS * 86400
+                )
             logger.info("Indexes created for chat_history_collection")
-            
+
         # Initialize Redis consumer group
         create_consumer_group()
 
     except Exception as e:
         logger.error(f"Startup tasks failed: {e}")
-    
+
     yield
     logger.info("Application cleanup complete")
 

@@ -87,9 +87,13 @@ Rate limits are enforced per `X-API-Key` (falling back to client IP) with a fixe
 | `OPENROUTER_CHAT_MODEL`| No      | Chat model for answer generation (default: `deepseek/deepseek-chat`)        |
 | `OPENROUTER_EMBEDDING_MODEL`| No | Embedding model (default: `baai/bge-m3`)                      |
 | `APP_API_KEY`         | **Yes**  | Secret key required for all endpoints (`X-API-Key` header)                  |
+| `APP_API_KEYS`        | No       | Optional JSON mapping `{"tenant_id": "api_key", ...}`. When set, the tenant is derived from the `X-API-Key` and self-declared `X-Tenant-Id` headers are rejected |
+| `MAX_UPLOAD_BYTES`    | No       | Maximum PDF upload size in bytes (default: 25MB)                            |
 | `REDIS_HOST`          | No       | Hostname for Redis service (default: `redis` for Docker)                    |
 | `REDIS_PORT`          | No       | Port for Redis service (default: `6379`)                                    |
 | `RATE_LIMIT_ENABLED`   | No       | Per-key rate limiting (default: `true`)                                     |
+| `WORKER_MAX_ATTEMPTS` | No       | Worker retries per job before marking it failed (default: `3`)              |
+| `WORKER_CONCURRENCY`  | No       | Worker concurrency (default: `2`)                                           |
 | `CHROMA_HOST`         | No       | Chroma Cloud hostname (default: `api.trychroma.com`)                        |
 | `CHROMA_PORT`         | No       | Chroma Cloud port (default: `443`)                                          |
 | `CHROMA_API_KEY`      | **Yes**  | API key for your Chroma Cloud tenant                                        |
@@ -101,6 +105,7 @@ Rate limits are enforced per `X-API-Key` (falling back to client IP) with a fixe
 | `MONGO_SRV`           | No       | Use `mongodb+srv` scheme when `true` (Atlas DNS-based clusters)             |
 | `MONGO_USERNAME`      | No       | MongoDB username; combined with `MONGO_PASSWORD` to build the connection URI |
 | `MONGO_PASSWORD`      | No       | MongoDB password                                                            |
+| `CHAT_HISTORY_TTL_DAYS`| No      | Chat history retention in days via a Mongo TTL index (default: `90`; `0` disables expiry) |
 
 ## Testing
 

@@ -1,5 +1,5 @@
-import os
-from fastapi import Request, HTTPException, Depends
+import asyncio, hashlib, os
+from fastapi import Request, HTTPException
 from loguru import logger
 from app.db.redis import redis_client
 
@@ -15,6 +15,10 @@ def _identifier(request: Request) -> str:
     return "anonymous"
 
 
+def _mask(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+
+
 def rate_limit(limit: int, window_seconds: int = 60):
     """Fixed-window rate limiter keyed by API key (falls back to client IP)."""
     async def dependency(request: Request):
@@ -28,14 +32,16 @@ def rate_limit(limit: int, window_seconds: int = 60):
         redis_key = f"rate-limit:{request.url.path}:{identifier}"
 
         try:
-            current = redis_client.incr(redis_key)
+            # Redis client is synchronous; offload so we don't block the loop.
+            current = await asyncio.to_thread(redis_client.incr, redis_key)
             if current == 1:
-                redis_client.expire(redis_key, window_seconds)
+                await asyncio.to_thread(redis_client.expire, redis_key, window_seconds)
             if current > limit:
                 raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
         except HTTPException:
             raise
         except Exception as e:
-            logger.warning(f"Rate limit check failed for {identifier}: {e}")
+            # Never log the raw API key - log a hash of it instead.
+            logger.warning(f"Rate limit check failed for key {_mask(identifier)}: {e}")
 
     return dependency

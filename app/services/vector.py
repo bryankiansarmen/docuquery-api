@@ -30,16 +30,19 @@ def store_document_chunks(
     file_name: str,
     document_id: str = None,
     tenant_id: str | None = None,
-):
+) -> bool:
     """Index document chunks into the (per-tenant) documents collection.
 
     Dense embeddings are generated via Chroma Cloud Qwen and sparse embeddings
     via Chroma Cloud Splade automatically from the collection Schema.
+
+    Returns True on success so callers (the worker) can fail the job rather
+    than silently reporting a completed document that is not searchable.
     """
     collection = _document_collection(tenant_id)
     if not collection:
         logger.error("ChromaDB not available, skipping storage.")
-        return
+        return False
 
     source_id = document_id or file_name
     ids = []
@@ -59,8 +62,10 @@ def store_document_chunks(
     try:
         collection.add(ids=ids, documents=documents, metadatas=metadatas)
         logger.info(f"Stored {len(chunks)} chunks for {file_name}")
+        return True
     except Exception as e:
         logger.error(f"Error storing chunks: {e}")
+        return False
 
 
 def search_document_chunks(

@@ -1,14 +1,59 @@
-import os
-from fastapi import Security, HTTPException, Header
+import json, os, hmac
+from fastapi import Request, Security, HTTPException
 from fastapi.security import APIKeyHeader
+from loguru import logger
 
 APP_API_KEY = os.getenv("APP_API_KEY")
-API_KEY_HEADER = APIKeyHeader(name="X-API-Key")
+APP_API_KEYS = os.getenv("APP_API_KEYS")
+
+# Optional per-tenant key mapping: {"tenant_id": "api_key", ...}. When set, the
+# X-API-Key identifies the tenant and self-declared tenant headers are ignored,
+# turning tenant sharding into an actual auth boundary.
+_tenant_api_keys = {}
+if APP_API_KEYS:
+    try:
+        _tenant_api_keys = json.loads(APP_API_KEYS)
+    except Exception as e:
+        logger.error(f"Invalid APP_API_KEYS JSON: {e}")
+
+API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def _secure_equal(a, b) -> bool:
+    if not isinstance(a, str) or not isinstance(b, str):
+        return False
+    return hmac.compare_digest(a, b)
+
+
+def _resolve_tenant(api_key: str | None) -> str | None:
+    if not api_key:
+        return None
+    if APP_API_KEY and _secure_equal(api_key, APP_API_KEY):
+        return "default"
+    for tenant, key in _tenant_api_keys.items():
+        if _secure_equal(api_key, key):
+            return tenant
+    return None
+
 
 def verify_api_key(key: str = Security(API_KEY_HEADER)):
-    if key != APP_API_KEY:
+    if not key:
+        raise HTTPException(status_code=401, detail="Missing API key")
+    if _resolve_tenant(key) is None:
         raise HTTPException(status_code=403, detail="Invalid API key")
 
-async def get_tenant_id(x_tenant_id: str = Header(default="default")) -> str:
-    """Resolve the tenant/org used to shard Chroma collections."""
-    return x_tenant_id or "default"
+
+async def get_tenant_id(request: Request) -> str:
+    """Resolve the tenant/org used to shard data.
+
+    When per-tenant keys (APP_API_KEYS) are configured the tenant is derived
+    from the authenticated API key and self-declared headers are rejected.
+    Otherwise the X-Tenant-Id header is used (single shared key mode).
+    """
+    key = request.headers.get("X-API-Key") or ""
+    if _tenant_api_keys:
+        tenant = _resolve_tenant(key)
+        if tenant is None:
+            raise HTTPException(status_code=403, detail="Invalid API key")
+        return tenant
+    return request.headers.get("X-Tenant-Id") or "default"

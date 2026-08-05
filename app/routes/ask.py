@@ -1,7 +1,8 @@
+import asyncio, uuid
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone
 from app.models.schemas import Question
-from app.services.store import DOCUMENT_STORE
+from app.services.store import get_store
 from app.clients.openrouter import get_chat_client
 from app.services.llm import generate_answer
 from app.services.vector import search_document_chunks, get_semantic_question_cache, save_semantic_question_cache
@@ -11,37 +12,40 @@ from app.services.document import get_document_metadata
 from app.dependencies import verify_api_key, get_tenant_id
 from app.rate_limit import rate_limit
 from loguru import logger
-import uuid
 
 router = APIRouter()
 
+
 @router.post("/ask", dependencies=[Depends(verify_api_key), Depends(rate_limit(30, 60))])
 async def ask_question(question: Question, tenant_id: str = Depends(get_tenant_id)):
-    # resolve the target document. Prefer the requested document_id; fall back
-    # to the active (most recently used) document when one is available.
+    store = get_store(tenant_id)
     document_id = question.document_id
     file_name = None
 
-    if DOCUMENT_STORE.get("document_id") == document_id and DOCUMENT_STORE.get("file_name"):
-        file_name = DOCUMENT_STORE.get("file_name")
+    # Resolve the target document. An explicit document_id that cannot be found
+    # is an error (never silently fall back to a different, "active" document).
+    if document_id and store.get("document_id") == document_id:
+        file_name = store.get("file_name")
     elif document_id:
-        metadata = await get_document_metadata(document_id)
+        metadata = await get_document_metadata(document_id, tenant_id=tenant_id)
         if metadata:
             file_name = metadata.get("file_name")
-            DOCUMENT_STORE.update({
+            store.update({
                 "file_name": file_name,
-                "document_id": document_id,
+                "document_id": metadata.get("document_id") or document_id,
                 "page_count": metadata.get("page_count"),
                 "chunk_count": metadata.get("chunk_count"),
                 "content": None,
             })
-
-    if not file_name:
-        active_document = get_active_document()
+        else:
+            raise HTTPException(status_code=400, detail="Document not found. Please upload the document first.")
+    else:
+        # No document id supplied: recover the most recently processed document.
+        active_document = await asyncio.to_thread(get_active_document, tenant_id)
         if active_document:
-            DOCUMENT_STORE.update(active_document)
-            file_name = DOCUMENT_STORE.get("file_name")
-            document_id = DOCUMENT_STORE.get("document_id")
+            store.update(active_document)
+            file_name = store.get("file_name")
+            document_id = store.get("document_id")
             logger.info(f"Recovered active document from Redis: {file_name}")
 
     if not file_name:
@@ -49,25 +53,33 @@ async def ask_question(question: Question, tenant_id: str = Depends(get_tenant_i
 
     session_id = question.session_id or str(uuid.uuid4())
 
-    # check exact cache first
+    # Check exact cache first.
     cache_key = create_answer_key(question.message, file_name, tenant_id)
-    cached_response = get_answer_cache(cache_key)
-    if cached_response:
+    cached_answer = await asyncio.to_thread(get_answer_cache, cache_key)
+    if cached_answer:
         logger.info(f"Exact cache hit: {question.message}")
-        return cached_response
+        await save_chat_turn(file_name, session_id, question.message, cached_answer)
+        return {
+            "answer": cached_answer,
+            "session_id": session_id,
+            "source_file": file_name,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "cache_type": "exact",
+        }
 
-    # check semantic cache
-    semantic_question_cached = get_semantic_question_cache(
-        question.message, file_name, tenant_id=tenant_id
+    # Check semantic cache.
+    semantic_question_cached = await asyncio.to_thread(
+        get_semantic_question_cache, question.message, file_name, tenant_id
     )
     if semantic_question_cached:
         logger.info(f"Semantic question cache hit: {question.message}")
+        await save_chat_turn(file_name, session_id, question.message, semantic_question_cached["answer"])
         return {
             "answer": semantic_question_cached["answer"],
             "session_id": session_id,
             "source_file": semantic_question_cached["metadata"]["source"],
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "cache_type": "semantic_question"
+            "cache_type": "semantic_question",
         }
 
     logger.info(f"Processing question: {question.message}")
@@ -75,7 +87,8 @@ async def ask_question(question: Question, tenant_id: str = Depends(get_tenant_i
     try:
         history = await get_chat_history(file_name, session_id)
 
-        chunks = search_document_chunks(
+        chunks = await asyncio.to_thread(
+            search_document_chunks,
             question.message,
             tenant_id=tenant_id,
             n=5,
@@ -84,11 +97,11 @@ async def ask_question(question: Question, tenant_id: str = Depends(get_tenant_i
         if not chunks:
             logger.warning("No chunks retrieved for question")
 
-        answer = generate_answer(question.message, chunks, history, get_chat_client())
+        answer = await asyncio.to_thread(generate_answer, question.message, chunks, history, get_chat_client())
 
         await save_chat_turn(file_name, session_id, question.message, answer)
-        save_answer_cache(cache_key, answer)
-        save_semantic_question_cache(question.message, answer, file_name, tenant_id=tenant_id)
+        await asyncio.to_thread(save_answer_cache, cache_key, answer)
+        await asyncio.to_thread(save_semantic_question_cache, question.message, answer, file_name, tenant_id)
 
         return {
             "answer": answer,
@@ -97,6 +110,9 @@ async def ask_question(question: Question, tenant_id: str = Depends(get_tenant_i
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error processing question: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Log the full traceback but never leak internals to the client.
+        logger.exception(f"Error processing question: {question.message}")
+        raise HTTPException(status_code=500, detail="Internal server error")

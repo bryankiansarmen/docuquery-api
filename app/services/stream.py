@@ -1,29 +1,37 @@
+import base64, json, os, uuid
 from app.db.redis import redis_client
 from loguru import logger
-import json, uuid
 
 STREAM_KEY = "docquery:upload_jobs"
 CONSUMER_GROUP = "upload_worker"
-CONSUMER_NAME = "worker_1"
+# Unique consumer name per process so multiple workers can share the group.
+CONSUMER_NAME = f"worker_{os.getpid()}_{uuid.uuid4().hex[:6]}"
 
 def publish_upload_job(
     document_id: str,
     file_name: str,
-    temp_path: str,
+    file_bytes: bytes,
     tenant_id: str | None = None,
 ) -> str:
+    """Publish a PDF processing job with the file bytes embedded in the stream.
+
+    The bytes are base64-encoded so the job is portable across hosts (e.g. a
+    separate worker container with no shared filesystem). A 'pending' status is
+    written immediately so status polling never 404s right after upload.
+    """
     if not redis_client:
         raise RuntimeError("Redis client not initialized")
-    
+
     job_id = str(uuid.uuid4())
     redis_client.xadd(STREAM_KEY, {
         "job_id": job_id,
         "document_id": document_id,
         "file_name": file_name,
-        "temp_path": temp_path,
+        "file_bytes": base64.b64encode(file_bytes).decode("ascii"),
         "tenant_id": tenant_id or "default",
     })
 
+    save_job_status(job_id, "pending", "Queued for processing")
     logger.info(f"Published upload job: {job_id} for {file_name}")
 
     return job_id

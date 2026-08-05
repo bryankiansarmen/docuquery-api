@@ -62,13 +62,14 @@ def mock_mongo(mocker):
     mock_chat_collection = MagicMock()
     mock_doc_collection = MagicMock()
     
-    # Mock async methods specifically
+# Mock async methods specifically
     mock_chat_collection.insert_one = AsyncMock()
     mock_chat_collection.find_one = AsyncMock()
     mock_chat_collection.delete_one = AsyncMock()
-    
+
     mock_doc_collection.update_one = AsyncMock()
-    mock_doc_collection.find_one = AsyncMock()
+    # Default find_one to None (docs lookups miss unless a test sets a value).
+    mock_doc_collection.find_one = AsyncMock(return_value=None)
     mock_doc_collection.delete_one = AsyncMock()
     
     mocker.patch("app.services.chat.chat_history_collection", mock_chat_collection)
