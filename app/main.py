@@ -51,7 +51,9 @@ async def lifespan(app: FastAPI):
     logger.info("Application cleanup complete")
 
 app = FastAPI(title="DocuQuery API", lifespan=lifespan)
-logger.add("logs/app.log", rotation="1 day", level="INFO")
+
+LOG_DIR = os.getenv("LOG_DIR", "/tmp/logs" if os.getenv("RENDER") else "logs")
+logger.add(os.path.join(LOG_DIR, "app.log"), rotation="1 day", level="INFO")
 
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
 
